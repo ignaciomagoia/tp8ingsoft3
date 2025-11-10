@@ -252,10 +252,13 @@ jobs:
         id: feprod
         run: |
           BACK_URL="https://tp8-back-prod.azurewebsites.net"
-          IMG="$ACR_LOGIN/${{ needs.build_and_push.outputs.front_repo }}:prod-${GITHUB_RUN_NUMBER}"
-          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
+          IMG="${{ secrets.ACR_LOGIN_SERVER }}/${{ needs.build_and_push.outputs.front_repo }}:prod-${GITHUB_RUN_NUMBER}"
+          echo "Usando imagen -> $IMG"
+          docker build -t "$IMG" -f frontend/Dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
+        env:
+          ACR_LOGIN: ${{ secrets.ACR_LOGIN_SERVER }}
 
       - name: Deploy frontend PROD
         run: |
