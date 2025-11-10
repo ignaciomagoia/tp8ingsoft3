@@ -159,6 +159,9 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Login to ACR
         run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
 
@@ -187,7 +190,7 @@ jobs:
           API_URL="http://${{ steps.beqa.outputs.fqdn }}:8080"
           IMG="$ACR_LOGIN/${{ needs.build_and_push.outputs.front_repo }}:qa-${GITHUB_RUN_NUMBER}"
           echo "Construyendo frontend QA -> $IMG"
-          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$API_URL" frontend
+          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$API_URL" .
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
@@ -222,6 +225,9 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Login to ACR
         run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
 
@@ -247,7 +253,7 @@ jobs:
         run: |
           BACK_URL="https://tp8-back-prod.azurewebsites.net"
           IMG="$ACR_LOGIN/${{ needs.build_and_push.outputs.front_repo }}:prod-${GITHUB_RUN_NUMBER}"
-          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
+          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$BACK_URL" .
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
