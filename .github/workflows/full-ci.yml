@@ -173,6 +173,9 @@ jobs:
             --cpu 1 --memory 1.5 --ports 8080 \
             --dns-name-label "tp8-back-qa-${GITHUB_RUN_NUMBER}" \
             --os-type Linux \
+            --registry-login-server "$ACR_LOGIN" \
+            --registry-username "$ACR_USER" \
+            --registry-password "$ACR_PASS" \
             --environment-variables MONGO_URI="${{ secrets.MONGO_URI }}" PORT=8080 \
             --restart-policy Always
           FQDN=$(az container show -g $RG -n tp8-back-qa --query ipAddress.fqdn -o tsv)
@@ -196,6 +199,9 @@ jobs:
             --cpu 1 --memory 1 --ports 80 \
             --dns-name-label "tp8-front-qa-${GITHUB_RUN_NUMBER}" \
             --os-type Linux \
+            --registry-login-server "$ACR_LOGIN" \
+            --registry-username "$ACR_USER" \
+            --registry-password "$ACR_PASS" \
             --restart-policy Always
           az container show -g $RG -n tp8-front-qa --query ipAddress.fqdn -o tsv
 
