@@ -129,7 +129,7 @@ jobs:
 
       - name: Build & push backend
         run: |
-          docker build -t "${{ steps.tags.outputs.back_img }}" -f backend/Dockerfile backend
+          docker build -t "${{ steps.tags.outputs.back_img }}" -f backend/dockerfile backend
           docker push "${{ steps.tags.outputs.back_img }}"
 
   deploy_qa:
@@ -162,7 +162,7 @@ jobs:
         run: |
           API_URL="http://${{ steps.beqa.outputs.fqdn }}:8080"
           IMG="${{ needs.build_and_push.outputs.front_img_base }}:qa-${GITHUB_RUN_NUMBER}"
-          docker build -t "$IMG" -f frontend/Dockerfile --build-arg VITE_API_URL="$API_URL" frontend
+          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$API_URL" frontend
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
@@ -216,7 +216,7 @@ jobs:
         run: |
           BACK_URL="https://tp8-back-prod.azurewebsites.net"
           IMG="${{ needs.build_and_push.outputs.front_img_base }}:prod-${GITHUB_RUN_NUMBER}"
-          docker build -t "$IMG" -f frontend/Dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
+          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
