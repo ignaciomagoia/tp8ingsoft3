@@ -1,23 +1,25 @@
 # syntax=docker/dockerfile:1
 
+# Etapa de build
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-ARG VITE_API_URL=http://localhost:8080
-ARG REACT_APP_API_URL
-ENV VITE_API_URL=${VITE_API_URL}
-ENV REACT_APP_API_URL=${REACT_APP_API_URL:-$VITE_API_URL}
+# Copiar dependencias y variables opcionales
+ARG REACT_APP_API_URL=http://localhost:8080
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
 
 COPY package*.json ./
 RUN npm ci
 
+# Copiar el resto del código y construir la app
 COPY . .
 RUN npm run build || npm run build:prod
 
+# Etapa de runtime (Nginx)
 FROM nginx:1.27-alpine
 WORKDIR /usr/share/nginx/html
 COPY --from=builder /app/build/ ./
-
 EXPOSE 80
-ENV PORT=80
-ENTRYPOINT ["/entrypoint.sh"]
+
+# Comando de inicio (Nginx por defecto)
+CMD ["nginx", "-g", "daemon off;"]
