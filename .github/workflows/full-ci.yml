@@ -113,24 +113,33 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests, sonarcloud-analysis, e2e-tests]
     outputs:
-      back_img: ${{ steps.tags.outputs.back_img }}
-      front_img_base: ${{ steps.tags.outputs.front_img_base }}
+      back_img: ${{ steps.set_outputs.outputs.back_img }}
+      front_img_base: ${{ steps.set_outputs.outputs.front_img_base }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Login to ACR
         run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
 
-      - name: Generate tags
-        id: tags
-        run: |
-          echo "back_img=$ACR_LOGIN/tp8-backend:${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-          echo "front_img_base=$ACR_LOGIN/tp8-frontend" >> $GITHUB_OUTPUT
-
       - name: Build & push backend
+        id: build_backend
         run: |
-          docker build -t "${{ steps.tags.outputs.back_img }}" -f backend/Dockerfile backend
-          docker push "${{ steps.tags.outputs.back_img }}"
+          BACK_IMG="$ACR_LOGIN/tp8-backend:${GITHUB_SHA::7}"
+          docker build -t "$BACK_IMG" -f backend/Dockerfile backend
+          docker push "$BACK_IMG"
+          echo "BACK_IMG=$BACK_IMG" >> $GITHUB_ENV
+
+      - name: Build & push frontend
+        id: build_frontend
+        run: |
+          FRONT_IMG_BASE="$ACR_LOGIN/tp8-frontend"
+          echo "FRONT_IMG_BASE=$FRONT_IMG_BASE" >> $GITHUB_ENV
+
+      - name: Set outputs
+        id: set_outputs
+        run: |
+          echo "back_img=${{ env.BACK_IMG }}" >> $GITHUB_OUTPUT
+          echo "front_img_base=${{ env.FRONT_IMG_BASE }}" >> $GITHUB_OUTPUT
 
   deploy_qa:
     name: Deploy QA (ACI)
