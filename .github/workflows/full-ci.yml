@@ -1,11 +1,20 @@
-name: Full CI/CD Pipeline
+name: Full CI/CD Pipeline (QA → PROD)
 
 on:
   push:
     branches: ["main", "develop"]
   pull_request:
     branches: ["main", "develop"]
+  workflow_dispatch:
 
+env:
+  RG: rg-tp8-cicd
+  REGION: "mexico central"
+  ACR_LOGIN: ${{ secrets.ACR_LOGIN_SERVER }}
+  ACR_USER:  ${{ secrets.ACR_USERNAME }}
+  ACR_PASS:  ${{ secrets.ACR_PASSWORD }}
+
+# === CI STAGES =======================================================
 jobs:
   backend-tests:
     name: Backend tests
@@ -15,21 +24,14 @@ jobs:
         shell: bash
         working-directory: backend
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-
-      - name: Run Go tests with coverage
-        run: |
+      - run: |
           go test ./... -coverprofile=coverage.out
           go tool cover -func=coverage.out
-
-      - name: Upload backend coverage
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
           path: backend/coverage.out
@@ -42,24 +44,15 @@ jobs:
         shell: bash
         working-directory: frontend
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run frontend tests with coverage
-        run: npm test -- --coverage --watchAll=false
-
-      - name: Upload frontend coverage
-        uses: actions/upload-artifact@v4
+      - run: npm ci
+      - run: npm test -- --coverage --watchAll=false
+      - uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage-report
           path: frontend/coverage/lcov-report
@@ -69,24 +62,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java (required for SonarCloud)
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v3
         with:
           distribution: "zulu"
           java-version: "17"
-
-      - name: Cache SonarCloud packages
-        uses: actions/cache@v3
+      - uses: actions/cache@v3
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
-
-      - name: Run SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2
+      - uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: .
         env:
@@ -102,27 +88,18 @@ jobs:
         shell: bash
         working-directory: frontend
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Run Cypress (start + wait + run)
+      - run: npm ci
+      - run: npm run e2e
         env:
           CYPRESS_BASE_URL: http://localhost:3000
-        run: npm run e2e
-
-      - name: Upload Cypress artifacts
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: cypress-artifacts
           path: |
@@ -130,232 +107,125 @@ jobs:
             frontend/cypress/screenshots
           if-no-files-found: ignore
 
-  build-and-push:
+# === CD STAGES =======================================================
+  build_and_push:
     name: Build & Push Docker images
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests, sonarcloud-analysis, e2e-tests]
-    env:
-      BACKEND_IMAGE: ${{ secrets.ACR_LOGIN_SERVER }}/tp8-backend:${{ github.sha }}
-      FRONTEND_IMAGE: ${{ secrets.ACR_LOGIN_SERVER }}/tp8-frontend:${{ github.sha }}
     outputs:
-      backend_image: ${{ steps.image-refs.outputs.backend_image }}
-      frontend_image: ${{ steps.image-refs.outputs.frontend_image }}
+      back_img: ${{ steps.tags.outputs.back_img }}
+      front_img_base: ${{ steps.tags.outputs.front_img_base }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Login to ACR
+        run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
 
-      - name: Log in to Azure Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Build & push backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: backend
-          file: backend/dockerfile
-          push: true
-          tags: |
-            ${{ env.BACKEND_IMAGE }}
-            ${{ secrets.ACR_LOGIN_SERVER }}/tp8-backend:latest
-
-      - name: Build & push frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: frontend
-          file: frontend/dockerfile
-          push: true
-          tags: |
-            ${{ env.FRONTEND_IMAGE }}
-            ${{ secrets.ACR_LOGIN_SERVER }}/tp8-frontend:latest
-
-      - name: Expose image references
-        id: image-refs
+      - name: Generate tags
+        id: tags
         run: |
-          echo "backend_image=${BACKEND_IMAGE}" >> "$GITHUB_OUTPUT"
-          echo "frontend_image=${FRONTEND_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "back_img=$ACR_LOGIN/tp8-backend:${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "front_img_base=$ACR_LOGIN/tp8-frontend" >> $GITHUB_OUTPUT
 
-  deploy-qa:
-    name: Deploy QA (Azure Container Instances)
+      - name: Build & push backend
+        run: |
+          docker build -t "${{ steps.tags.outputs.back_img }}" -f backend/Dockerfile backend
+          docker push "${{ steps.tags.outputs.back_img }}"
+
+  deploy_qa:
+    name: Deploy QA (ACI)
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: build_and_push
     environment: qa
-    env:
-      RESOURCE_GROUP: rg-tp8-cicd
-      QA_MONGO_URI: ${{ secrets.MONGO_URI }}
-      ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
-      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
     steps:
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - uses: azure/login@v2
+        with: { creds: ${{ secrets.AZURE_CREDENTIALS }} }
 
-      - name: Deploy containers to QA
-        uses: azure/cli@v2
-        with:
-          azcliversion: 2.63.0
-          inlineScript: |
-            set -euo pipefail
+      - name: Login to ACR
+        run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
 
-            RG="$RESOURCE_GROUP"
-            LOCATION=$(az group show --name "$RG" --query location -o tsv | tr '[:upper:]' '[:lower:]')
-            BACKEND_IMAGE="${{ needs.build-and-push.outputs.backend_image }}"
-            FRONTEND_IMAGE="${{ needs.build-and-push.outputs.frontend_image }}"
-            BACKEND_NAME="tp8-backend-qa"
-            FRONTEND_NAME="tp8-frontend-qa"
-            BACKEND_DNS="tp8backendqa"
-            FRONTEND_DNS="tp8frontendqa"
-
-            delete_container() {
-              local container_name="$1"
-              if az container show --resource-group "$RG" --name "$container_name" >/dev/null 2>&1; then
-                az container delete --resource-group "$RG" --name "$container_name" --yes
-                az container wait --resource-group "$RG" --name "$container_name" --deleted
-              fi
-            }
-
-            delete_container "$BACKEND_NAME"
-            delete_container "$FRONTEND_NAME"
-
-            az container create \
-              --resource-group "$RG" \
-              --name "$BACKEND_NAME" \
-              --image "$BACKEND_IMAGE" \
-              --registry-login-server "$ACR_LOGIN_SERVER" \
-              --registry-username "$ACR_USERNAME" \
-              --registry-password "$ACR_PASSWORD" \
-              --dns-name-label "$BACKEND_DNS" \
-              --ports 8080 \
-              --ip-address Public \
-              --restart-policy Always \
-              --cpu 1 \
-              --memory 2 \
-              --environment-variables PORT=8080 \
-              --secure-environment-variables MONGO_URI="$QA_MONGO_URI"
-
-            BACKEND_FQDN="${BACKEND_DNS}.${LOCATION}.azurecontainer.io"
-            QA_API_URL="http://${BACKEND_FQDN}:8080"
-
-            az container create \
-              --resource-group "$RG" \
-              --name "$FRONTEND_NAME" \
-              --image "$FRONTEND_IMAGE" \
-              --registry-login-server "$ACR_LOGIN_SERVER" \
-              --registry-username "$ACR_USERNAME" \
-              --registry-password "$ACR_PASSWORD" \
-              --dns-name-label "$FRONTEND_DNS" \
-              --ports 80 \
-              --ip-address Public \
-              --restart-policy Always \
-              --cpu 1 \
-              --memory 1.5 \
-              --environment-variables PORT=80 VITE_API_URL="$QA_API_URL" REACT_APP_API_URL="$QA_API_URL"
-
-  deploy-prod:
-    name: Deploy PROD (Azure App Service)
-    runs-on: ubuntu-latest
-    needs: [build-and-push, deploy-qa]
-    environment: prod
-    env:
-      RESOURCE_GROUP: rg-tp8-cicd
-      PROD_MONGO_URI: ${{ secrets.MONGO_URI }}
-      ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
-      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
-    steps:
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Deploy Web Apps
-        uses: azure/cli@v2
-        with:
-          azcliversion: 2.63.0
-          inlineScript: |
-            set -euo pipefail
-
-            RG="$RESOURCE_GROUP"
-            LOCATION=$(az group show --name "$RG" --query location -o tsv)
-            PLAN_NAME="tp8-linux-plan"
-            BACKEND_APP="tp8-backend-prod"
-            FRONTEND_APP="tp8-frontend-prod"
-            BACKEND_IMAGE="${{ needs.build-and-push.outputs.backend_image }}"
-            FRONTEND_IMAGE="${{ needs.build-and-push.outputs.frontend_image }}"
-            REGISTRY_URL="https://${ACR_LOGIN_SERVER}"
-
-            if ! az appservice plan show --name "$PLAN_NAME" --resource-group "$RG" >/dev/null 2>&1; then
-              az appservice plan create --name "$PLAN_NAME" --resource-group "$RG" --is-linux --sku B1 --location "$LOCATION"
-            fi
-
-            if ! az webapp show --name "$BACKEND_APP" --resource-group "$RG" >/dev/null 2>&1; then
-              az webapp create --name "$BACKEND_APP" --resource-group "$RG" --plan "$PLAN_NAME" --deployment-container-image-name "$BACKEND_IMAGE"
-            fi
-
-            az webapp config container set \
-              --name "$BACKEND_APP" \
-              --resource-group "$RG" \
-              --docker-custom-image-name "$BACKEND_IMAGE" \
-              --docker-registry-server-url "$REGISTRY_URL" \
-              --docker-registry-server-user "$ACR_USERNAME" \
-              --docker-registry-server-password "$ACR_PASSWORD"
-
-            az webapp config appsettings set \
-              --name "$BACKEND_APP" \
-              --resource-group "$RG" \
-              --settings WEBSITES_PORT=8080 PORT=8080 \
-              --slot-settings MONGO_URI="$PROD_MONGO_URI"
-
-            BACKEND_URL="https://${BACKEND_APP}.azurewebsites.net"
-
-            if ! az webapp show --name "$FRONTEND_APP" --resource-group "$RG" >/dev/null 2>&1; then
-              az webapp create --name "$FRONTEND_APP" --resource-group "$RG" --plan "$PLAN_NAME" --deployment-container-image-name "$FRONTEND_IMAGE"
-            fi
-
-            az webapp config container set \
-              --name "$FRONTEND_APP" \
-              --resource-group "$RG" \
-              --docker-custom-image-name "$FRONTEND_IMAGE" \
-              --docker-registry-server-url "$REGISTRY_URL" \
-              --docker-registry-server-user "$ACR_USERNAME" \
-              --docker-registry-server-password "$ACR_PASSWORD"
-
-            az webapp config appsettings set \
-              --name "$FRONTEND_APP" \
-              --resource-group "$RG" \
-              --settings WEBSITES_PORT=80 PORT=80 VITE_API_URL="$BACKEND_URL" REACT_APP_API_URL="$BACKEND_URL"
-
-            az webapp restart --name "$BACKEND_APP" --resource-group "$RG"
-            az webapp restart --name "$FRONTEND_APP" --resource-group "$RG"
-
-  summary:
-    name: Pipeline summary
-    runs-on: ubuntu-latest
-    needs:
-      [
-        backend-tests,
-        frontend-tests,
-        sonarcloud-analysis,
-        e2e-tests,
-        build-and-push,
-        deploy-qa,
-        deploy-prod,
-      ]
-    if: ${{ always() }}
-    steps:
-      - name: Show summary
+      - name: Deploy backend QA
+        id: beqa
         run: |
-          echo "Backend tests: ${{ needs.backend-tests.result }}"
-          echo "Frontend tests: ${{ needs.frontend-tests.result }}"
-          echo "SonarCloud: ${{ needs.sonarcloud-analysis.result }}"
-          echo "E2E: ${{ needs.e2e-tests.result }}"
-          echo "Build & push: ${{ needs.build-and-push.result }}"
-          echo "QA deploy: ${{ needs.deploy-qa.result }}"
-          echo "PROD deploy: ${{ needs.deploy-prod.result }}"
+          az container delete -g $RG -n tp8-back-qa -y || true
+          az container create -g $RG -n tp8-back-qa \
+            --image "${{ needs.build_and_push.outputs.back_img }}" \
+            --cpu 1 --memory 1.5 --ports 8080 \
+            --dns-name-label "tp8-back-qa-${GITHUB_RUN_NUMBER}" \
+            --environment-variables MONGO_URI="${{ secrets.MONGO_URI }}" PORT=8080 \
+            --restart-policy Always
+          FQDN=$(az container show -g $RG -n tp8-back-qa --query ipAddress.fqdn -o tsv)
+          echo "fqdn=$FQDN" >> $GITHUB_OUTPUT
+
+      - name: Build & push frontend (QA)
+        id: feqa
+        run: |
+          API_URL="http://${{ steps.beqa.outputs.fqdn }}:8080"
+          IMG="${{ needs.build_and_push.outputs.front_img_base }}:qa-${GITHUB_RUN_NUMBER}"
+          docker build -t "$IMG" -f frontend/Dockerfile --build-arg VITE_API_URL="$API_URL" frontend
+          docker push "$IMG"
+          echo "img=$IMG" >> $GITHUB_OUTPUT
+
+      - name: Deploy frontend QA
+        run: |
+          az container delete -g $RG -n tp8-front-qa -y || true
+          az container create -g $RG -n tp8-front-qa \
+            --image "${{ steps.feqa.outputs.img }}" \
+            --cpu 1 --memory 1 --ports 80 \
+            --dns-name-label "tp8-front-qa-${GITHUB_RUN_NUMBER}" \
+            --restart-policy Always
+          az container show -g $RG -n tp8-front-qa --query ipAddress.fqdn -o tsv
+
+  approve_prod:
+    name: Approval Gate for PROD
+    runs-on: ubuntu-latest
+    needs: deploy_qa
+    environment: prod
+    steps:
+      - run: echo "Esperando aprobación manual para PROD..."
+
+  deploy_prod:
+    name: Deploy PROD (App Service)
+    runs-on: ubuntu-latest
+    needs: approve_prod
+    steps:
+      - uses: azure/login@v2
+        with: { creds: ${{ secrets.AZURE_CREDENTIALS }} }
+
+      - name: Login to ACR
+        run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
+
+      - name: Create App Service plan
+        run: |
+          az appservice plan create -g $RG -n asp-tp8-prod --is-linux --sku B1 --location "$REGION" || true
+
+      - name: Deploy backend PROD
+        run: |
+          az webapp create -g $RG -p asp-tp8-prod -n tp8-back-prod \
+            --deployment-container-image-name "${{ needs.build_and_push.outputs.back_img }}" || true
+          az webapp config appsettings set -g $RG -n tp8-back-prod \
+            --settings MONGO_URI="${{ secrets.MONGO_URI }}" WEBSITES_PORT=8080
+          az webapp config container set -g $RG -n tp8-back-prod \
+            --docker-custom-image-name "${{ needs.build_and_push.outputs.back_img }}" \
+            --docker-registry-server-url "https://$ACR_LOGIN" \
+            --docker-registry-server-user "$ACR_USER" \
+            --docker-registry-server-password "$ACR_PASS"
+
+      - name: Build & push frontend (PROD)
+        id: feprod
+        run: |
+          BACK_URL="https://tp8-back-prod.azurewebsites.net"
+          IMG="${{ needs.build_and_push.outputs.front_img_base }}:prod-${GITHUB_RUN_NUMBER}"
+          docker build -t "$IMG" -f frontend/Dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
+          docker push "$IMG"
+          echo "img=$IMG" >> $GITHUB_OUTPUT
+
+      - name: Deploy frontend PROD
+        run: |
+          az webapp create -g $RG -p asp-tp8-prod -n tp8-front-prod \
+            --deployment-container-image-name "${{ steps.feprod.outputs.img }}" || true
+          az webapp config container set -g $RG -n tp8-front-prod \
+            --docker-custom-image-name "${{ steps.feprod.outputs.img }}" \
+            --docker-registry-server-url "https://$ACR_LOGIN" \
+            --docker-registry-server-user "$ACR_USER" \
+            --docker-registry-server-password "$ACR_PASS"
