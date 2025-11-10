@@ -117,8 +117,8 @@ jobs:
       ACR_USER: ${{ secrets.ACR_USERNAME }}
       ACR_PASS: ${{ secrets.ACR_PASSWORD }}
     outputs:
-      back_img: ${{ steps.image_tags.outputs.back_img }}
-      front_img_base: ${{ steps.image_tags.outputs.front_img_base }}
+      back_tag: ${{ steps.image_tags.outputs.back_tag }}
+      front_repo: ${{ steps.image_tags.outputs.front_repo }}
     steps:
       - uses: actions/checkout@v4
 
@@ -128,21 +128,26 @@ jobs:
       - name: Prepare image tags
         id: image_tags
         run: |
-          BACK_IMAGE="$ACR_LOGIN/tp8-backend:${GITHUB_SHA::7}"
-          FRONT_IMAGE_BASE="$ACR_LOGIN/tp8-frontend"
+          BACK_TAG="tp8-backend:${GITHUB_SHA::7}"
+          FRONT_REPO="tp8-frontend"
 
-          echo "Backend image tag -> $BACK_IMAGE"
-          echo "Frontend image base -> $FRONT_IMAGE_BASE"
+          echo "Backend image tag -> $BACK_TAG"
+          echo "Frontend repo -> $FRONT_REPO"
 
           {
-            echo "back_img=$BACK_IMAGE"
-            echo "front_img_base=$FRONT_IMAGE_BASE"
+            echo "back_tag=$BACK_TAG"
+            echo "front_repo=$FRONT_REPO"
           } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "BACK_TAG=$BACK_TAG"
+            echo "FRONT_REPO=$FRONT_REPO"
+          } >> "$GITHUB_ENV"
 
       - name: Build & push backend
         run: |
-          docker build -t "${{ steps.image_tags.outputs.back_img }}" -f backend/dockerfile backend
-          docker push "${{ steps.image_tags.outputs.back_img }}"
+          docker build -t "$ACR_LOGIN/$BACK_TAG" -f backend/dockerfile backend
+          docker push "$ACR_LOGIN/$BACK_TAG"
 
   deploy_qa:
     name: Deploy QA (ACI)
@@ -161,8 +166,10 @@ jobs:
         id: beqa
         run: |
           az container delete -g $RG -n tp8-back-qa -y || true
+          BACK_IMAGE="$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}"
+          echo "Usando imagen backend QA: $BACK_IMAGE"
           az container create -g $RG -n tp8-back-qa \
-            --image "${{ needs.build_and_push.outputs.back_img }}" \
+            --image "$BACK_IMAGE" \
             --cpu 1 --memory 1.5 --ports 8080 \
             --dns-name-label "tp8-back-qa-${GITHUB_RUN_NUMBER}" \
             --os-type Linux \
@@ -175,8 +182,9 @@ jobs:
         id: feqa
         run: |
           API_URL="http://${{ steps.beqa.outputs.fqdn }}:8080"
-          IMG="${{ needs.build_and_push.outputs.front_img_base }}:qa-${GITHUB_RUN_NUMBER}"
-          docker build -t "$IMG" -f frontend/Dockerfile --build-arg VITE_API_URL="$API_URL" frontend
+          IMG="$ACR_LOGIN/${{ needs.build_and_push.outputs.front_repo }}:qa-${GITHUB_RUN_NUMBER}"
+          echo "Construyendo frontend QA -> $IMG"
+          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$API_URL" frontend
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
@@ -217,12 +225,13 @@ jobs:
 
       - name: Deploy backend PROD
         run: |
+          BACK_IMAGE="$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}"
           az webapp create -g $RG -p asp-tp8-prod -n tp8-back-prod \
-            --deployment-container-image-name "${{ needs.build_and_push.outputs.back_img }}" || true
+            --deployment-container-image-name "$BACK_IMAGE" || true
           az webapp config appsettings set -g $RG -n tp8-back-prod \
             --settings MONGO_URI="${{ secrets.MONGO_URI }}" WEBSITES_PORT=8080
           az webapp config container set -g $RG -n tp8-back-prod \
-            --docker-custom-image-name "${{ needs.build_and_push.outputs.back_img }}" \
+            --docker-custom-image-name "$BACK_IMAGE" \
             --docker-registry-server-url "https://$ACR_LOGIN" \
             --docker-registry-server-user "$ACR_USER" \
             --docker-registry-server-password "$ACR_PASS"
@@ -231,8 +240,8 @@ jobs:
         id: feprod
         run: |
           BACK_URL="https://tp8-back-prod.azurewebsites.net"
-          IMG="${{ needs.build_and_push.outputs.front_img_base }}:prod-${GITHUB_RUN_NUMBER}"
-          docker build -t "$IMG" -f frontend/Dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
+          IMG="$ACR_LOGIN/${{ needs.build_and_push.outputs.front_repo }}:prod-${GITHUB_RUN_NUMBER}"
+          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
