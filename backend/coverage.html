@@ -1,0 +1,918 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>handlers: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/ignaciomagoia/tp6ingdesoft/backend/internal/handlers/auth_handler.go (62.1%)</option>
+				
+				<option value="file1">github.com/ignaciomagoia/tp6ingdesoft/backend/internal/handlers/routes.go (100.0%)</option>
+				
+				<option value="file2">github.com/ignaciomagoia/tp6ingdesoft/backend/internal/handlers/todo_handler.go (65.0%)</option>
+				
+				<option value="file3">github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services/db.go (75.0%)</option>
+				
+				<option value="file4">github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services/models.go (100.0%)</option>
+				
+				<option value="file5">github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services/todo_service.go (84.0%)</option>
+				
+				<option value="file6">github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services/user_service.go (83.7%)</option>
+				
+				<option value="file7">github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services/utils.go (100.0%)</option>
+				
+				<option value="file8">github.com/ignaciomagoia/tp6ingdesoft/backend/main.go (0.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package handlers
+
+import (
+        "errors"
+        "net/http"
+
+        "github.com/gin-gonic/gin"
+
+        "github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services"
+)
+
+// AuthHandler exposes HTTP handlers related to authentication.
+type AuthHandler struct {
+        users *services.UserService
+}
+
+// NewAuthHandler constructs an AuthHandler instance.
+func NewAuthHandler(users *services.UserService) *AuthHandler <span class="cov8" title="1">{
+        return &amp;AuthHandler{users: users}
+}</span>
+
+type registerRequest struct {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+}
+
+// Register handles user registration.
+func (h *AuthHandler) Register(c *gin.Context) <span class="cov8" title="1">{
+        var payload registerRequest
+        if err := c.ShouldBindJSON(&amp;payload); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "datos invalidos"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">err := h.users.Register(c.Request.Context(), services.User{
+                Email:    payload.Email,
+                Password: payload.Password,
+        })
+        switch </span>{
+        case err == nil:<span class="cov8" title="1">
+                c.JSON(http.StatusCreated, gin.H{"message": "usuario registrado con exito"})</span>
+        case errors.Is(err, services.ErrInvalidUserInput):<span class="cov0" title="0">
+                c.JSON(http.StatusBadRequest, gin.H{"error": "email y clave son requeridos"})</span>
+        case errors.Is(err, services.ErrUserAlreadyExists):<span class="cov8" title="1">
+                c.JSON(http.StatusConflict, gin.H{"error": "usuario ya existe"})</span>
+        default:<span class="cov0" title="0">
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "error al registrar usuario"})</span>
+        }
+}
+
+type loginRequest struct {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+}
+
+// Login handles user authentication.
+func (h *AuthHandler) Login(c *gin.Context) <span class="cov8" title="1">{
+        var payload loginRequest
+        if err := c.ShouldBindJSON(&amp;payload); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "datos invalidos"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">err := h.users.Login(c.Request.Context(), payload.Email, payload.Password)
+        switch </span>{
+        case err == nil:<span class="cov8" title="1">
+                c.JSON(http.StatusOK, gin.H{"message": "login exitoso"})</span>
+        case errors.Is(err, services.ErrInvalidCredentials):<span class="cov8" title="1">
+                c.JSON(http.StatusUnauthorized, gin.H{"error": "credenciales invalidas"})</span>
+        default:<span class="cov0" title="0">
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "error al autenticar"})</span>
+        }
+}
+
+// ListUsers returns every registered user in its public form.
+func (h *AuthHandler) ListUsers(c *gin.Context) <span class="cov8" title="1">{
+        users, err := h.users.List(c.Request.Context())
+        if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener usuarios"})
+                return
+        }</span>
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"users": users})</span>
+}
+
+// ClearUsers removes every user. Intended for testing scenarios.
+func (h *AuthHandler) ClearUsers(c *gin.Context) <span class="cov8" title="1">{
+        if err := h.users.Clear(c.Request.Context()); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "error al limpiar usuarios"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": "usuarios eliminados"})</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package handlers
+
+import (
+        "net/http"
+
+        "github.com/gin-contrib/cors"
+        "github.com/gin-gonic/gin"
+)
+
+// RouterConfig allows customising router construction (handy for tests).
+type RouterConfig struct {
+        AllowedOrigins []string
+}
+
+// SetupRouter wires handlers with the HTTP routes.
+func SetupRouter(auth *AuthHandler, todos *TodoHandler, cfg RouterConfig) *gin.Engine <span class="cov8" title="1">{
+        router := gin.Default()
+
+        origins := cfg.AllowedOrigins
+        if len(origins) == 0 </span><span class="cov8" title="1">{
+                origins = []string{"http://localhost:3000", "http://localhost:3001"}
+        }</span>
+
+        <span class="cov8" title="1">corsCfg := cors.Config{
+                AllowOrigins:     origins,
+                AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+                AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+                AllowCredentials: true,
+        }
+        router.Use(cors.New(corsCfg))
+
+        router.GET("/healthz", func(c *gin.Context) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusOK, gin.H{"status": "ok"})
+        }</span>)
+
+        <span class="cov8" title="1">router.POST("/register", auth.Register)
+        router.POST("/login", auth.Login)
+        router.GET("/users", auth.ListUsers)
+        router.DELETE("/users", auth.ClearUsers)
+
+        router.GET("/todos", todos.ListTodos)
+        router.POST("/todos", todos.CreateTodo)
+        router.PUT("/todos/:id", todos.UpdateTodo)
+        router.DELETE("/todos/:id", todos.DeleteTodo)
+        router.DELETE("/todos", todos.ClearTodos)
+
+        return router</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package handlers
+
+import (
+        "errors"
+        "net/http"
+
+        "github.com/gin-gonic/gin"
+
+        "github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services"
+)
+
+// TodoHandler exposes HTTP handlers for todo operations.
+type TodoHandler struct {
+        todos *services.TodoService
+}
+
+// NewTodoHandler builds a new TodoHandler instance.
+func NewTodoHandler(todos *services.TodoService) *TodoHandler <span class="cov8" title="1">{
+        return &amp;TodoHandler{todos: todos}
+}</span>
+
+// ListTodos retrieves todos filtered by email if provided.
+func (h *TodoHandler) ListTodos(c *gin.Context) <span class="cov8" title="1">{
+        email := c.Query("email")
+        todos, err := h.todos.List(c.Request.Context(), email)
+        if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener tareas"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"todos": todos})</span>
+}
+
+type createTodoRequest struct {
+        Email string `json:"email"`
+        Title string `json:"title"`
+}
+
+// CreateTodo stores a new todo.
+func (h *TodoHandler) CreateTodo(c *gin.Context) <span class="cov8" title="1">{
+        var payload createTodoRequest
+        if err := c.ShouldBindJSON(&amp;payload); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "datos invalidos"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">todo, err := h.todos.Create(c.Request.Context(), payload.Email, payload.Title)
+        switch </span>{
+        case err == nil:<span class="cov8" title="1">
+                c.JSON(http.StatusCreated, gin.H{"todo": todo})</span>
+        case errors.Is(err, services.ErrInvalidTodoInput):<span class="cov8" title="1">
+                c.JSON(http.StatusBadRequest, gin.H{"error": "email y titulo son requeridos"})</span>
+        default:<span class="cov0" title="0">
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "error al crear tarea"})</span>
+        }
+}
+
+type updateTodoRequest struct {
+        Title     *string `json:"title"`
+        Completed *bool   `json:"completed"`
+}
+
+// UpdateTodo modifies an existing todo.
+func (h *TodoHandler) UpdateTodo(c *gin.Context) <span class="cov8" title="1">{
+        id := c.Param("id")
+
+        var payload updateTodoRequest
+        if err := c.ShouldBindJSON(&amp;payload); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "datos invalidos"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">todo, err := h.todos.Update(c.Request.Context(), id, services.TodoUpdate{
+                Title:     payload.Title,
+                Completed: payload.Completed,
+        })
+        switch </span>{
+        case err == nil:<span class="cov8" title="1">
+                c.JSON(http.StatusOK, gin.H{"todo": todo})</span>
+        case errors.Is(err, services.ErrInvalidTodoInput):<span class="cov0" title="0">
+                c.JSON(http.StatusBadRequest, gin.H{"error": "nada para actualizar"})</span>
+        case errors.Is(err, services.ErrInvalidTodoID):<span class="cov8" title="1">
+                c.JSON(http.StatusBadRequest, gin.H{"error": "id invalido"})</span>
+        case errors.Is(err, services.ErrNotFound):<span class="cov0" title="0">
+                c.JSON(http.StatusNotFound, gin.H{"error": "tarea no encontrada"})</span>
+        default:<span class="cov0" title="0">
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "error al actualizar tarea"})</span>
+        }
+}
+
+// DeleteTodo removes a todo by ID.
+func (h *TodoHandler) DeleteTodo(c *gin.Context) <span class="cov8" title="1">{
+        id := c.Param("id")
+
+        err := h.todos.Delete(c.Request.Context(), id)
+        switch </span>{
+        case err == nil:<span class="cov8" title="1">
+                c.JSON(http.StatusOK, gin.H{"message": "tarea eliminada"})</span>
+        case errors.Is(err, services.ErrInvalidTodoID):<span class="cov8" title="1">
+                c.JSON(http.StatusBadRequest, gin.H{"error": "id invalido"})</span>
+        case errors.Is(err, services.ErrNotFound):<span class="cov0" title="0">
+                c.JSON(http.StatusNotFound, gin.H{"error": "tarea no encontrada"})</span>
+        default:<span class="cov0" title="0">
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "error al eliminar tarea"})</span>
+        }
+}
+
+// ClearTodos removes todos optionally filtered by email.
+func (h *TodoHandler) ClearTodos(c *gin.Context) <span class="cov8" title="1">{
+        email := c.Query("email")
+        if err := h.todos.Clear(c.Request.Context(), email); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "error al limpiar tareas"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": "tareas eliminadas"})</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package services
+
+import (
+        "context"
+        "time"
+
+        "go.mongodb.org/mongo-driver/mongo"
+        "go.mongodb.org/mongo-driver/mongo/options"
+)
+
+const (
+        // DefaultDatabaseName is used when no explicit database name is provided.
+        DefaultDatabaseName = "hotelapp"
+)
+
+// ConnectMongo initialises a MongoDB client with a timeout to avoid hanging
+// connections during startup.
+func ConnectMongo(ctx context.Context, uri string) (*mongo.Client, error) <span class="cov8" title="1">{
+        clientOpts := options.Client().ApplyURI(uri)
+        client, err := mongo.NewClient(clientOpts)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">c, cancel := context.WithTimeout(ctx, 10*time.Second)
+        defer cancel()
+
+        if err := client.Connect(c); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">if err := client.Ping(c, nil); err != nil </span><span class="cov8" title="1">{
+                _ = client.Disconnect(c)
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">return client, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package services
+
+import (
+        "time"
+
+        "go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+// User represents a registered user in the system.
+type User struct {
+        Email    string `json:"email" bson:"email"`
+        Password string `json:"password,omitempty" bson:"password"`
+}
+
+// PublicUser hides sensitive user data when returning it through the API.
+type PublicUser struct {
+        Email string `json:"email"`
+}
+
+// ToPublic converts the User into a PublicUser without exposing the password.
+func (u User) ToPublic() PublicUser <span class="cov8" title="1">{
+        return PublicUser{Email: u.Email}
+}</span>
+
+// Todo models a task stored in MongoDB.
+type Todo struct {
+        ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+        Email     string             `json:"email" bson:"email"`
+        Title     string             `json:"title" bson:"title"`
+        Completed bool               `json:"completed" bson:"completed"`
+        CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+}
+
+// TodoResponse is the representation exposed through the API.
+type TodoResponse struct {
+        ID        string    `json:"id"`
+        Email     string    `json:"email"`
+        Title     string    `json:"title"`
+        Completed bool      `json:"completed"`
+        CreatedAt time.Time `json:"createdAt"`
+}
+
+// ToResponse converts a Todo into an externally safe representation.
+func (t Todo) ToResponse() TodoResponse <span class="cov8" title="1">{
+        return TodoResponse{
+                ID:        t.ID.Hex(),
+                Email:     t.Email,
+                Title:     t.Title,
+                Completed: t.Completed,
+                CreatedAt: t.CreatedAt,
+        }
+}</span>
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package services
+
+import (
+        "context"
+        "errors"
+        "time"
+
+        "go.mongodb.org/mongo-driver/bson"
+        "go.mongodb.org/mongo-driver/bson/primitive"
+        "go.mongodb.org/mongo-driver/mongo"
+        "go.mongodb.org/mongo-driver/mongo/options"
+)
+
+var (
+        // ErrInvalidTodoInput indicates missing or malformed todo data.
+        ErrInvalidTodoInput = errors.New("invalid todo input")
+        // ErrInvalidTodoID indicates the todo ID could not be parsed.
+        ErrInvalidTodoID = errors.New("invalid todo id")
+)
+
+// TodoUpdate models the fields that can be updated on a Todo.
+type TodoUpdate struct {
+        Title     *string
+        Completed *bool
+}
+
+// TodoRepository is the storage contract required by the todo service.
+type TodoRepository interface {
+        List(ctx context.Context, email string) ([]Todo, error)
+        Create(ctx context.Context, todo Todo) (Todo, error)
+        Update(ctx context.Context, id primitive.ObjectID, update TodoUpdate) (Todo, error)
+        Delete(ctx context.Context, id primitive.ObjectID) error
+        Clear(ctx context.Context, email string) error
+}
+
+// MongoTodoRepository implements TodoRepository backed by MongoDB.
+type MongoTodoRepository struct {
+        collection *mongo.Collection
+}
+
+// NewMongoTodoRepository creates a new repository wrapper around a Mongo collection.
+func NewMongoTodoRepository(collection *mongo.Collection) *MongoTodoRepository <span class="cov8" title="1">{
+        return &amp;MongoTodoRepository{collection: collection}
+}</span>
+
+// List returns todos optionally filtered by email.
+func (m *MongoTodoRepository) List(ctx context.Context, email string) ([]Todo, error) <span class="cov8" title="1">{
+        filter := bson.M{}
+        if email != "" </span><span class="cov8" title="1">{
+                filter["email"] = email
+        }</span>
+
+        <span class="cov8" title="1">cursor, err := m.collection.Find(ctx, filter, options.Find().SetSort(bson.M{"createdAt": 1}))
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">defer cursor.Close(ctx)
+
+        var todos []Todo
+        if err := cursor.All(ctx, &amp;todos); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">return todos, nil</span>
+}
+
+// Create stores a todo in MongoDB and returns it with the generated ID.
+func (m *MongoTodoRepository) Create(ctx context.Context, todo Todo) (Todo, error) <span class="cov8" title="1">{
+        res, err := m.collection.InsertOne(ctx, todo)
+        if err != nil </span><span class="cov0" title="0">{
+                return Todo{}, err
+        }</span>
+        <span class="cov8" title="1">if oid, ok := res.InsertedID.(primitive.ObjectID); ok </span><span class="cov8" title="1">{
+                todo.ID = oid
+        }</span>
+        <span class="cov8" title="1">return todo, nil</span>
+}
+
+// Update modifies a todo and returns the updated version.
+func (m *MongoTodoRepository) Update(ctx context.Context, id primitive.ObjectID, update TodoUpdate) (Todo, error) <span class="cov8" title="1">{
+        updateDoc := bson.M{}
+        if update.Title != nil </span><span class="cov8" title="1">{
+                updateDoc["title"] = *update.Title
+        }</span>
+        <span class="cov8" title="1">if update.Completed != nil </span><span class="cov8" title="1">{
+                updateDoc["completed"] = *update.Completed
+        }</span>
+
+        <span class="cov8" title="1">res := m.collection.FindOneAndUpdate(
+                ctx,
+                bson.M{"_id": id},
+                bson.M{"$set": updateDoc},
+                options.FindOneAndUpdate().SetReturnDocument(options.After),
+        )
+
+        var todo Todo
+        if err := res.Decode(&amp;todo); err != nil </span><span class="cov0" title="0">{
+                if errors.Is(err, mongo.ErrNoDocuments) </span><span class="cov0" title="0">{
+                        return Todo{}, ErrNotFound
+                }</span>
+                <span class="cov0" title="0">return Todo{}, err</span>
+        }
+        <span class="cov8" title="1">return todo, nil</span>
+}
+
+// Delete removes a todo by ID.
+func (m *MongoTodoRepository) Delete(ctx context.Context, id primitive.ObjectID) error <span class="cov8" title="1">{
+        res, err := m.collection.DeleteOne(ctx, bson.M{"_id": id})
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">if res.DeletedCount == 0 </span><span class="cov0" title="0">{
+                return ErrNotFound
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// Clear remove todos optionally filtered by email.
+func (m *MongoTodoRepository) Clear(ctx context.Context, email string) error <span class="cov8" title="1">{
+        filter := bson.M{}
+        if email != "" </span><span class="cov8" title="1">{
+                filter["email"] = email
+        }</span>
+        <span class="cov8" title="1">_, err := m.collection.DeleteMany(ctx, filter)
+        return err</span>
+}
+
+// TodoService encapsulates business logic for todo operations.
+type TodoService struct {
+        repo TodoRepository
+        now  func() time.Time
+}
+
+// NewTodoService builds a new TodoService instance.
+func NewTodoService(repo TodoRepository, now func() time.Time) *TodoService <span class="cov8" title="1">{
+        if now == nil </span><span class="cov0" title="0">{
+                now = time.Now
+        }</span>
+        <span class="cov8" title="1">return &amp;TodoService{repo: repo, now: now}</span>
+}
+
+// List returns todos optionally filtered by user email.
+func (s *TodoService) List(ctx context.Context, email string) ([]TodoResponse, error) <span class="cov8" title="1">{
+        email = NormalizeEmail(email)
+
+        todos, err := s.repo.List(ctx, email)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">responses := make([]TodoResponse, 0, len(todos))
+        for _, todo := range todos </span><span class="cov8" title="1">{
+                responses = append(responses, todo.ToResponse())
+        }</span>
+        <span class="cov8" title="1">return responses, nil</span>
+}
+
+// Create validates input and stores a new todo.
+func (s *TodoService) Create(ctx context.Context, email, title string) (TodoResponse, error) <span class="cov8" title="1">{
+        email = NormalizeEmail(email)
+        title = NormalizeText(title)
+
+        if email == "" || title == "" </span><span class="cov8" title="1">{
+                return TodoResponse{}, ErrInvalidTodoInput
+        }</span>
+
+        <span class="cov8" title="1">todo := Todo{
+                Email:     email,
+                Title:     title,
+                Completed: false,
+                CreatedAt: s.now(),
+        }
+
+        created, err := s.repo.Create(ctx, todo)
+        if err != nil </span><span class="cov0" title="0">{
+                return TodoResponse{}, err
+        }</span>
+
+        <span class="cov8" title="1">return created.ToResponse(), nil</span>
+}
+
+// Update applies the provided modification to a todo and returns the updated todo.
+func (s *TodoService) Update(ctx context.Context, id string, update TodoUpdate) (TodoResponse, error) <span class="cov8" title="1">{
+        if update.Title == nil &amp;&amp; update.Completed == nil </span><span class="cov8" title="1">{
+                return TodoResponse{}, ErrInvalidTodoInput
+        }</span>
+
+        <span class="cov8" title="1">objID, err := primitive.ObjectIDFromHex(id)
+        if err != nil </span><span class="cov8" title="1">{
+                return TodoResponse{}, ErrInvalidTodoID
+        }</span>
+
+        <span class="cov8" title="1">if update.Title != nil </span><span class="cov8" title="1">{
+                title := NormalizeText(*update.Title)
+                if title == "" </span><span class="cov0" title="0">{
+                        return TodoResponse{}, ErrInvalidTodoInput
+                }</span>
+                <span class="cov8" title="1">update.Title = &amp;title</span>
+        }
+
+        <span class="cov8" title="1">updated, err := s.repo.Update(ctx, objID, update)
+        if err != nil </span><span class="cov0" title="0">{
+                return TodoResponse{}, err
+        }</span>
+
+        <span class="cov8" title="1">return updated.ToResponse(), nil</span>
+}
+
+// Delete removes a todo by ID.
+func (s *TodoService) Delete(ctx context.Context, id string) error <span class="cov8" title="1">{
+        objID, err := primitive.ObjectIDFromHex(id)
+        if err != nil </span><span class="cov8" title="1">{
+                return ErrInvalidTodoID
+        }</span>
+        <span class="cov8" title="1">return s.repo.Delete(ctx, objID)</span>
+}
+
+// Clear removes todos optionally filtered by email.
+func (s *TodoService) Clear(ctx context.Context, email string) error <span class="cov8" title="1">{
+        email = NormalizeEmail(email)
+        return s.repo.Clear(ctx, email)
+}</span>
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package services
+
+import (
+        "context"
+        "errors"
+
+        "go.mongodb.org/mongo-driver/bson"
+        "go.mongodb.org/mongo-driver/mongo"
+)
+
+var (
+        // ErrNotFound signals that a requested entity does not exist.
+        ErrNotFound = errors.New("not found")
+        // ErrInvalidUserInput indicates missing or malformed user data.
+        ErrInvalidUserInput = errors.New("invalid user input")
+        // ErrUserAlreadyExists is returned when trying to create a duplicated user.
+        ErrUserAlreadyExists = errors.New("user already exists")
+        // ErrInvalidCredentials is returned when the email/password combination is wrong.
+        ErrInvalidCredentials = errors.New("invalid credentials")
+)
+
+// UserRepository is the storage contract required by the user service.
+type UserRepository interface {
+        FindByEmail(ctx context.Context, email string) (User, error)
+        Insert(ctx context.Context, user User) error
+        List(ctx context.Context) ([]User, error)
+        Clear(ctx context.Context) error
+}
+
+// MongoUserRepository implements UserRepository backed by MongoDB.
+type MongoUserRepository struct {
+        collection *mongo.Collection
+}
+
+// NewMongoUserRepository creates a new repository wrapper around a Mongo collection.
+func NewMongoUserRepository(collection *mongo.Collection) *MongoUserRepository <span class="cov8" title="1">{
+        return &amp;MongoUserRepository{collection: collection}
+}</span>
+
+// FindByEmail retrieves a user by email or returns ErrNotFound.
+func (m *MongoUserRepository) FindByEmail(ctx context.Context, email string) (User, error) <span class="cov8" title="1">{
+        var user User
+        err := m.collection.FindOne(ctx, bson.M{"email": email}).Decode(&amp;user)
+        if errors.Is(err, mongo.ErrNoDocuments) </span><span class="cov8" title="1">{
+                return User{}, ErrNotFound
+        }</span>
+        <span class="cov8" title="1">return user, err</span>
+}
+
+// Insert stores the provided user in MongoDB.
+func (m *MongoUserRepository) Insert(ctx context.Context, user User) error <span class="cov8" title="1">{
+        _, err := m.collection.InsertOne(ctx, user)
+        return err
+}</span>
+
+// List retrieves all users.
+func (m *MongoUserRepository) List(ctx context.Context) ([]User, error) <span class="cov8" title="1">{
+        cursor, err := m.collection.Find(ctx, bson.M{})
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">defer cursor.Close(ctx)
+
+        var users []User
+        if err := cursor.All(ctx, &amp;users); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">return users, nil</span>
+}
+
+// Clear removes all users from the collection.
+func (m *MongoUserRepository) Clear(ctx context.Context) error <span class="cov8" title="1">{
+        _, err := m.collection.DeleteMany(ctx, bson.M{})
+        return err
+}</span>
+
+// UserService encapsulates business logic for user operations.
+type UserService struct {
+        repo UserRepository
+}
+
+// NewUserService builds a new UserService instance.
+func NewUserService(repo UserRepository) *UserService <span class="cov8" title="1">{
+        return &amp;UserService{repo: repo}
+}</span>
+
+// Register validates and stores a user; returns high-level domain errors.
+func (s *UserService) Register(ctx context.Context, user User) error <span class="cov8" title="1">{
+        user.Email = NormalizeEmail(user.Email)
+        user.Password = NormalizeText(user.Password)
+
+        if user.Email == "" || user.Password == "" </span><span class="cov0" title="0">{
+                return ErrInvalidUserInput
+        }</span>
+
+        <span class="cov8" title="1">_, err := s.repo.FindByEmail(ctx, user.Email)
+        if err == nil </span><span class="cov8" title="1">{
+                return ErrUserAlreadyExists
+        }</span>
+        <span class="cov8" title="1">if !errors.Is(err, ErrNotFound) </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">return s.repo.Insert(ctx, user)</span>
+}
+
+// Login validates the provided credentials.
+func (s *UserService) Login(ctx context.Context, email, password string) error <span class="cov8" title="1">{
+        email = NormalizeEmail(email)
+        password = NormalizeText(password)
+
+        if email == "" || password == "" </span><span class="cov8" title="1">{
+                return ErrInvalidCredentials
+        }</span>
+
+        <span class="cov8" title="1">user, err := s.repo.FindByEmail(ctx, email)
+        if err != nil </span><span class="cov0" title="0">{
+                if errors.Is(err, ErrNotFound) </span><span class="cov0" title="0">{
+                        return ErrInvalidCredentials
+                }</span>
+                <span class="cov0" title="0">return err</span>
+        }
+        <span class="cov8" title="1">if user.Password != password </span><span class="cov8" title="1">{
+                return ErrInvalidCredentials
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// List returns all users in their public representation.
+func (s *UserService) List(ctx context.Context) ([]PublicUser, error) <span class="cov8" title="1">{
+        users, err := s.repo.List(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">public := make([]PublicUser, 0, len(users))
+        for _, u := range users </span><span class="cov8" title="1">{
+                public = append(public, u.ToPublic())
+        }</span>
+        <span class="cov8" title="1">return public, nil</span>
+}
+
+// Clear removes all user records.
+func (s *UserService) Clear(ctx context.Context) error <span class="cov8" title="1">{
+        return s.repo.Clear(ctx)
+}</span>
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package services
+
+import "strings"
+
+// NormalizeEmail trims spaces and lowercases an email value.
+func NormalizeEmail(email string) string <span class="cov8" title="1">{
+        return strings.ToLower(strings.TrimSpace(email))
+}</span>
+
+// NormalizeText trims spaces from free-form text.
+func NormalizeText(value string) string <span class="cov8" title="1">{
+        return strings.TrimSpace(value)
+}</span>
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package main
+
+import (
+        "context"
+        "log"
+        "os"
+        "time"
+
+        "github.com/ignaciomagoia/tp6ingdesoft/backend/internal/handlers"
+        "github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services"
+)
+
+func main() <span class="cov0" title="0">{
+        ctx := context.Background()
+
+        mongoURI := os.Getenv("MONGO_URI")
+        if mongoURI == "" </span><span class="cov0" title="0">{
+                mongoURI = "mongodb://localhost:27017"
+        }</span>
+
+        <span class="cov0" title="0">dbName := os.Getenv("MONGO_DB")
+        if dbName == "" </span><span class="cov0" title="0">{
+                dbName = services.DefaultDatabaseName
+        }</span>
+
+        <span class="cov0" title="0">client, err := services.ConnectMongo(ctx, mongoURI)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("no se pudo conectar a MongoDB: %v", err)
+        }</span>
+        <span class="cov0" title="0">defer func() </span><span class="cov0" title="0">{
+                _ = client.Disconnect(context.Background())
+        }</span>()
+
+        <span class="cov0" title="0">db := client.Database(dbName)
+
+        userRepo := services.NewMongoUserRepository(db.Collection("users"))
+        todoRepo := services.NewMongoTodoRepository(db.Collection("todos"))
+
+        userService := services.NewUserService(userRepo)
+        todoService := services.NewTodoService(todoRepo, time.Now)
+
+        authHandler := handlers.NewAuthHandler(userService)
+        todoHandler := handlers.NewTodoHandler(todoService)
+
+        router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{})
+
+        port := os.Getenv("PORT")
+        if port == "" </span><span class="cov0" title="0">{
+                port = "8080"
+        }</span>
+
+        <span class="cov0" title="0">if err := router.Run(":" + port); err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("no se pudo iniciar el servidor: %v", err)
+        }</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

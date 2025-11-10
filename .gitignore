@@ -1,0 +1,9 @@
+# Node
+frontend/node_modules/
+frontend/build/
+
+# Logs
+*.log
+
+# Dependencias Go (se pueden regenerar con go mod tidy)
+bin/
