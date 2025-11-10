@@ -1,17 +1,25 @@
-# Si usás Vite: usa VITE_API_URL; si usás CRA: REACT_APP_API_URL (ver build-arg).
-FROM node:20-alpine AS build
+# syntax=docker/dockerfile:1
+
+FROM node:20-alpine AS builder
 WORKDIR /app
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ .
-# Recibe el API URL en build time
-ARG VITE_API_URL
+
+ARG VITE_API_URL=http://localhost:8080
 ARG REACT_APP_API_URL
-ENV VITE_API_URL=$VITE_API_URL
-ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
+ENV REACT_APP_API_URL=${REACT_APP_API_URL:-$VITE_API_URL}
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
 RUN npm run build || npm run build:prod
 
-FROM nginx:alpine
-COPY --from=build /app/dist/ /usr/share/nginx/html 2>/dev/null || true
-COPY --from=build /app/build/ /usr/share/nginx/html 2>/dev/null || true
+FROM nginx:1.27-alpine
+WORKDIR /usr/share/nginx/html
+COPY --from=builder /app/build/ ./
+COPY docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 80
+ENV PORT=80
+ENTRYPOINT ["/entrypoint.sh"]
