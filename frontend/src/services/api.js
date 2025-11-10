@@ -1,4 +1,12 @@
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
+const runtimeEnv =
+  typeof window !== "undefined" ? window.__ENV__ || {} : {};
+
+const API_URL =
+  runtimeEnv.VITE_API_URL ||
+  runtimeEnv.REACT_APP_API_URL ||
+  process.env.VITE_API_URL ||
+  process.env.REACT_APP_API_URL ||
+  "http://localhost:8080";
 
 async function handleResponse(response) {
   const contentType = response.headers.get("Content-Type") || "";
