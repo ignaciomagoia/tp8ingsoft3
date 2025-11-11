@@ -23,7 +23,9 @@ RUN npm run build || npm run build:prod
 FROM nginx:1.27-alpine
 WORKDIR /usr/share/nginx/html
 COPY --from=builder /app/build/ ./
+COPY docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 EXPOSE 80
 
-# Comando de inicio (Nginx por defecto)
-CMD ["nginx", "-g", "daemon off;"]
+# Comando de inicio (inyecta VITE_API_URL en env-config y arranca Nginx)
+ENTRYPOINT ["/entrypoint.sh"]
