@@ -226,7 +226,7 @@ jobs:
       ACR_USER: ${{ secrets.ACR_USERNAME }}
       ACR_PASS: ${{ secrets.ACR_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4   # 🔥 checkout del repo antes de construir
+      - uses: actions/checkout@v4 # 🔥 checkout del repo antes de construir
 
       - uses: azure/login@v2
         with:
