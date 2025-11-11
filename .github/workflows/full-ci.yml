@@ -220,13 +220,14 @@ jobs:
     name: Deploy PROD (App Service)
     runs-on: ubuntu-latest
     needs: approve_prod
+    env:
+      ACR_LOGIN: ${{ secrets.ACR_LOGIN_SERVER }}
+      ACR_USER: ${{ secrets.ACR_USERNAME }}
+      ACR_PASS: ${{ secrets.ACR_PASSWORD }}
     steps:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Login to ACR
         run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
@@ -237,13 +238,12 @@ jobs:
 
       - name: Deploy backend PROD
         run: |
-          BACK_IMAGE="$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}"
           az webapp create -g $RG -p asp-tp8-prod -n tp8-back-prod \
-            --deployment-container-image-name "$BACK_IMAGE" || true
+            --deployment-container-image-name "${{ needs.build_and_push.outputs.back_tag }}" || true
           az webapp config appsettings set -g $RG -n tp8-back-prod \
             --settings MONGO_URI="${{ secrets.MONGO_URI }}" WEBSITES_PORT=8080
           az webapp config container set -g $RG -n tp8-back-prod \
-            --docker-custom-image-name "$BACK_IMAGE" \
+            --docker-custom-image-name "${{ needs.build_and_push.outputs.back_tag }}" \
             --docker-registry-server-url "https://$ACR_LOGIN" \
             --docker-registry-server-user "$ACR_USER" \
             --docker-registry-server-password "$ACR_PASS"
@@ -252,13 +252,11 @@ jobs:
         id: feprod
         run: |
           BACK_URL="https://tp8-back-prod.azurewebsites.net"
-          IMG="${{ secrets.ACR_LOGIN_SERVER }}/${{ needs.build_and_push.outputs.front_repo }}:prod-${GITHUB_RUN_NUMBER}"
+          IMG="${ACR_LOGIN}/tp8-frontend:prod-${GITHUB_RUN_NUMBER}"
           echo "Usando imagen -> $IMG"
           docker build -t "$IMG" -f frontend/Dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
-        env:
-          ACR_LOGIN: ${{ secrets.ACR_LOGIN_SERVER }}
 
       - name: Deploy frontend PROD
         run: |
