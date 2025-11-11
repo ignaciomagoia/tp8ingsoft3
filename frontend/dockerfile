@@ -5,8 +5,11 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copiar dependencias y variables opcionales
-ARG REACT_APP_API_URL=http://localhost:8080
-ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+ARG VITE_API_URL=http://localhost:8080
+ENV VITE_API_URL=${VITE_API_URL}
+
+# En producción (GitHub Actions) se puede ejecutar:
+# docker build -t front-prod --build-arg VITE_API_URL=https://tp8-back-prod.azurewebsites.net .
 
 COPY package.json ./
 COPY package-lock.json ./
