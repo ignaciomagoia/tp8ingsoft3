@@ -250,6 +250,7 @@ jobs:
             --docker-registry-server-url "https://$ACR_LOGIN" \
             --docker-registry-server-user "$ACR_USER" \
             --docker-registry-server-password "$ACR_PASS"
+          az webapp restart -g $RG -n tp8-back-prod
 
       - name: Build & push frontend (PROD)
         id: feprod

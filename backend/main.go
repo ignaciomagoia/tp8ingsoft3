@@ -14,6 +14,7 @@ import (
 
 func getAllowedOrigins() []string {
 	env := os.Getenv("FRONT_ORIGINS")
+	log.Printf("FRONT_ORIGINS env raw: %q", env)
 	if env == "" {
 		return []string{"http://localhost:5173"}
 	}
@@ -22,6 +23,7 @@ func getAllowedOrigins() []string {
 	for _, p := range parts {
 		if s := strings.TrimSpace(p); s != "" {
 			out = append(out, s)
+			log.Printf("Allowed origin loaded: %s", s)
 		}
 	}
 	return out
@@ -69,6 +71,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}
+	log.Printf("CORS final config origins: %v", corsCfg.AllowOrigins)
 	router.Use(cors.New(corsCfg))
 
 	port := os.Getenv("PORT")
