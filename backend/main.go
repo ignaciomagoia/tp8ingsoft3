@@ -42,7 +42,17 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userService)
 	todoHandler := handlers.NewTodoHandler(todoService)
 
-	router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{})
+	allowedOrigins := []string{
+		"http://localhost:3000",
+		"http://localhost:3001",
+		"https://tp8-front-qa.trafficmanager.net",
+		"https://tp8-front-qa.azurewebsites.net",
+		"https://tp8-front-prod.azurewebsites.net",
+	}
+
+	router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{
+		AllowedOrigins: allowedOrigins,
+	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
