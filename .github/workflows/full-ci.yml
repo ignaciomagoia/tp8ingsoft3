@@ -179,7 +179,7 @@ jobs:
             --registry-login-server "$ACR_LOGIN" \
             --registry-username "$ACR_USER" \
             --registry-password "$ACR_PASS" \
-            --environment-variables MONGO_URI="${{ secrets.MONGO_URI }}" PORT=8080 \
+            --environment-variables MONGO_URI="${{ secrets.MONGO_URI }}" PORT=8080 FRONT_ORIGINS="https://tp8-front-qa.mexicocentral.azurecontainer.io,https://tp8-front-prod.azurewebsites.net,http://localhost:5173" \
             --restart-policy Always
           FQDN=$(az container show -g $RG -n tp8-back-qa --query ipAddress.fqdn -o tsv)
           echo "fqdn=$FQDN" >> $GITHUB_OUTPUT
@@ -244,7 +244,7 @@ jobs:
           az webapp create -g $RG -p asp-tp8-prod -n tp8-back-prod \
             --deployment-container-image-name "${{ needs.build_and_push.outputs.back_tag }}" || true
           az webapp config appsettings set -g $RG -n tp8-back-prod \
-            --settings MONGO_URI="${{ secrets.MONGO_URI }}" WEBSITES_PORT=8080
+            --settings MONGO_URI="${{ secrets.MONGO_URI }}" WEBSITES_PORT=8080 FRONT_ORIGINS="https://tp8-front-prod.azurewebsites.net,https://tp8-front-qa.mexicocentral.azurecontainer.io,http://localhost:5173"
           az webapp config container set -g $RG -n tp8-back-prod \
             --docker-custom-image-name "${{ needs.build_and_push.outputs.back_tag }}" \
             --docker-registry-server-url "https://$ACR_LOGIN" \

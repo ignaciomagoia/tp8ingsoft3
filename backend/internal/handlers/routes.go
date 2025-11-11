@@ -3,7 +3,6 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,19 +14,6 @@ type RouterConfig struct {
 // SetupRouter wires handlers with the HTTP routes.
 func SetupRouter(auth *AuthHandler, todos *TodoHandler, cfg RouterConfig) *gin.Engine {
 	router := gin.Default()
-
-	origins := cfg.AllowedOrigins
-	if len(origins) == 0 {
-		origins = []string{"http://localhost:3000", "http://localhost:3001"}
-	}
-
-	corsCfg := cors.Config{
-		AllowOrigins:     origins,
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		AllowCredentials: true,
-	}
-	router.Use(cors.New(corsCfg))
 
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})

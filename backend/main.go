@@ -4,11 +4,29 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/handlers"
 	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services"
 )
+
+func getAllowedOrigins() []string {
+	env := os.Getenv("FRONT_ORIGINS")
+	if env == "" {
+		return []string{"http://localhost:5173"}
+	}
+	parts := strings.Split(env, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
 
 func main() {
 	ctx := context.Background()
@@ -42,17 +60,17 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userService)
 	todoHandler := handlers.NewTodoHandler(todoService)
 
-	allowedOrigins := []string{
-		"http://localhost:3000",
-		"http://localhost:3001",
-		"https://tp8-front-qa.trafficmanager.net",
-		"https://tp8-front-qa.azurewebsites.net",
-		"https://tp8-front-prod.azurewebsites.net",
-	}
+	router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{})
 
-	router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{
-		AllowedOrigins: allowedOrigins,
-	})
+	corsCfg := cors.Config{
+		AllowOrigins:     getAllowedOrigins(),
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}
+	router.Use(cors.New(corsCfg))
 
 	port := os.Getenv("PORT")
 	if port == "" {
