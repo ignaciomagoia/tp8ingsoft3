@@ -14,8 +14,9 @@ import (
 
 func getAllowedOrigins() []string {
 	env := os.Getenv("FRONT_ORIGINS")
-	log.Printf("FRONT_ORIGINS env raw: %q", env)
+	log.Printf("[CORS] FRONT_ORIGINS desde env: %q", env)
 	if env == "" {
+		log.Printf("[CORS] ⚠ FRONT_ORIGINS vacío, usando default: http://localhost:5173")
 		return []string{"http://localhost:5173"}
 	}
 	parts := strings.Split(env, ",")
@@ -23,9 +24,10 @@ func getAllowedOrigins() []string {
 	for _, p := range parts {
 		if s := strings.TrimSpace(p); s != "" {
 			out = append(out, s)
-			log.Printf("Allowed origin loaded: %s", s)
+			log.Printf("[CORS] ✅ Origen permitido: %q", s)
 		}
 	}
+	log.Printf("[CORS] Total de orígenes permitidos: %d", len(out))
 	return out
 }
 
@@ -61,17 +63,40 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userService)
 	todoHandler := handlers.NewTodoHandler(todoService)
 
-	router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{})
+	// Configurar CORS ANTES de crear el router
+	allowedOrigins := getAllowedOrigins()
+
+	// Crear un mapa para búsqueda rápida de orígenes permitidos
+	allowedOriginsMap := make(map[string]bool)
+	for _, origin := range allowedOrigins {
+		allowedOriginsMap[origin] = true
+	}
 
 	corsCfg := cors.Config{
-		AllowOrigins:     getAllowedOrigins(),
+		AllowOriginFunc: func(origin string) bool {
+			// Si no hay origen (petición del mismo origen), permitir
+			if origin == "" {
+				return true
+			}
+			// Permitir si el origen está en la lista
+			if allowedOriginsMap[origin] {
+				log.Printf("[CORS] ✅ Origen permitido: %q", origin)
+				return true
+			}
+			log.Printf("[CORS] ❌ Origen bloqueado: %q (permitidos: %v)", origin, allowedOrigins)
+			return false
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}
-	log.Printf("CORS final config origins: %v", corsCfg.AllowOrigins)
+	log.Printf("[CORS] Configuración aplicada con %d orígenes permitidos", len(allowedOrigins))
+
+	router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{})
+
+	// Aplicar CORS como PRIMER middleware (crítico para que funcione correctamente)
 	router.Use(cors.New(corsCfg))
 
 	port := os.Getenv("PORT")
@@ -79,6 +104,8 @@ func main() {
 		port = "8080"
 	}
 
+	log.Printf("[SERVER] Iniciando servidor en puerto %s", port)
+	log.Printf("[SERVER] CORS configurado para orígenes: %v", allowedOrigins)
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("no se pudo iniciar el servidor: %v", err)
 	}
