@@ -269,3 +269,9 @@ jobs:
             --docker-registry-server-url "https://$ACR_LOGIN" \
             --docker-registry-server-user "$ACR_USER" \
             --docker-registry-server-password "$ACR_PASS"
+
+      - name: Mostrar URL pública
+        run: |
+          echo "✅ DEPLOYMENT COMPLETO"
+          echo "Aplicación disponible en:"
+          echo "👉 https://tp8-front-prod.azurewebsites.net"
