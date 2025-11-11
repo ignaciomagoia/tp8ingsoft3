@@ -242,14 +242,16 @@ jobs:
       - name: Deploy backend PROD
         run: |
           az webapp create -g $RG -p asp-tp8-prod -n tp8-back-prod \
-            --deployment-container-image-name "${{ needs.build_and_push.outputs.back_tag }}" || true
+            --deployment-container-image-name "$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}" || true
           az webapp config appsettings set -g $RG -n tp8-back-prod \
-            --settings MONGO_URI="${{ secrets.MONGO_URI }}" WEBSITES_PORT=8080 FRONT_ORIGINS="https://tp8-front-prod.azurewebsites.net,https://tp8-front-qa.mexicocentral.azurecontainer.io,http://localhost:5173"
+            --settings MONGO_URI="${{ secrets.MONGO_URI }}" WEBSITES_PORT=8080 FRONT_ORIGINS="https://tp8-front-prod.azurewebsites.net,https://tp8-front-qa.mexicocentral.azurecontainer.io,http://localhost:5173" SCM_DO_BUILD_DURING_DEPLOYMENT=false
           az webapp config container set -g $RG -n tp8-back-prod \
-            --docker-custom-image-name "${{ needs.build_and_push.outputs.back_tag }}" \
+            --docker-custom-image-name "$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}" \
             --docker-registry-server-url "https://$ACR_LOGIN" \
             --docker-registry-server-user "$ACR_USER" \
             --docker-registry-server-password "$ACR_PASS"
+          az webapp config set -g $RG -n tp8-back-prod \
+            --linux-fx-version "DOCKER|$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}"
           az webapp restart -g $RG -n tp8-back-prod
 
       - name: Build & push frontend (PROD)
