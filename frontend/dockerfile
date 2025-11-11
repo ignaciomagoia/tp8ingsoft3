@@ -10,7 +10,7 @@ ENV REACT_APP_API_URL=${REACT_APP_API_URL}
 
 COPY package.json ./
 COPY package-lock.json ./
-RUN npm ci
+RUN npm ci --omit=dev
 
 # Copiar el resto del código y construir la app
 COPY . .
