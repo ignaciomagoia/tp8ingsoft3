@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/handlers"
 	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services"
 )
