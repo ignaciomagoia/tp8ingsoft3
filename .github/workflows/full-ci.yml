@@ -244,7 +244,8 @@ jobs:
           az webapp create -g $RG -p asp-tp8-prod -n tp8-back-prod \
             --deployment-container-image-name "$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}" || true
           az webapp config appsettings set -g $RG -n tp8-back-prod \
-            --settings MONGO_URI="${{ secrets.MONGO_URI }}" WEBSITES_PORT=8080 FRONT_ORIGINS="https://tp8-front-prod.azurewebsites.net,https://tp8-front-qa.mexicocentral.azurecontainer.io,http://localhost:5173" SCM_DO_BUILD_DURING_DEPLOYMENT=false
+            --settings MONGO_URI="${{ secrets.MONGO_URI }}" WEBSITES_PORT=8080 FRONT_ORIGINS="https://tp8-front-prod.azurewebsites.net,https://tp8-front-qa.mexicocentral.azurecontainer.io,http://localhost:5173" \
+            SCM_DO_BUILD_DURING_DEPLOYMENT=false
           az webapp config container set -g $RG -n tp8-back-prod \
             --docker-custom-image-name "$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}" \
             --docker-registry-server-url "https://$ACR_LOGIN" \
@@ -260,7 +261,7 @@ jobs:
           BACK_URL="https://tp8-back-prod.azurewebsites.net"
           IMG="${ACR_LOGIN}/tp8-frontend:prod-${GITHUB_RUN_NUMBER}"
           echo "Usando imagen -> $IMG"
-          docker build -t "$IMG" -f frontend/Dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
+          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$BACK_URL" frontend
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
