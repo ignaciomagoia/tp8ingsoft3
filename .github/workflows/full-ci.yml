@@ -148,16 +148,36 @@ jobs:
       - name: Prepare tags
         id: tags
         run: |
+          set -euo pipefail
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          BACK_TAG="tp8-backend:$SHORT_SHA"
+          if [[ -z "$SHORT_SHA" ]]; then
+            echo "SHORT_SHA no puede estar vacio" >&2
+            exit 1
+          fi
+
+          BACK_TAG="tp8-backend:${SHORT_SHA}"
           FRONT_REPO="tp8-frontend"
-          echo "back_tag=$BACK_TAG" >> $GITHUB_OUTPUT
-          echo "front_repo=$FRONT_REPO" >> $GITHUB_OUTPUT
+
+          if [[ -z "$BACK_TAG" ]]; then
+            echo "BACK_TAG no puede estar vacio" >&2
+            exit 1
+          fi
+
+          echo "back_tag=$BACK_TAG" >> "$GITHUB_OUTPUT"
+          echo "front_repo=$FRONT_REPO" >> "$GITHUB_OUTPUT"
+
+          echo "BACK_TAG=$BACK_TAG" >> "$GITHUB_ENV"
+          echo "FRONT_REPO=$FRONT_REPO" >> "$GITHUB_ENV"
 
       - name: Build & push backend
         run: |
-          docker build -t "$ACR_LOGIN/$BACK_TAG" -f backend/dockerfile backend
-          docker push "$ACR_LOGIN/$BACK_TAG"
+          set -euo pipefail
+          if [[ -z "${BACK_TAG:-}" ]]; then
+            echo "BACK_TAG no esta definido" >&2
+            exit 1
+          fi
+          docker build -t "$ACR_LOGIN/${BACK_TAG}" -f backend/dockerfile backend
+          docker push "$ACR_LOGIN/${BACK_TAG}"
 
 # =====================================================================
 #                          QA DEPLOY (ACI)
