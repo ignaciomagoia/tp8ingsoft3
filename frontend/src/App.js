@@ -66,7 +66,6 @@ function App() {
       handleAuthSuccess(email, response.message ?? "Usuario registrado correctamente");
     } catch (error) {
       showToast(error.message, "error");
-      throw error;
     }
   };
 
@@ -76,7 +75,6 @@ function App() {
       handleAuthSuccess(email, response.message ?? "Inicio de sesión exitoso");
     } catch (error) {
       showToast(error.message, "error");
-      throw error;
     }
   };
 

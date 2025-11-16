@@ -8,26 +8,51 @@ import (
 	"time"
 
 	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/handlers"
 	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services"
 )
 
 func getAllowedOrigins() []string {
+	defaultOrigins := []string{
+		"http://localhost:3000",
+		"http://localhost:5173",
+		"http://127.0.0.1:3000",
+		"http://127.0.0.1:5173",
+	}
+
 	env := os.Getenv("FRONT_ORIGINS")
 	log.Printf("[CORS] FRONT_ORIGINS desde env: %q", env)
-	if env == "" {
-		log.Printf("[CORS] ⚠ FRONT_ORIGINS vacío, usando default: http://localhost:5173")
-		return []string{"http://localhost:5173"}
+
+	out := make([]string, 0, len(defaultOrigins))
+	seen := make(map[string]struct{})
+
+	addOrigin := func(origin string) {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed == "" {
+			return
+		}
+		if _, ok := seen[trimmed]; ok {
+			return
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+		log.Printf("[CORS] Origen permitido agregado: %q", trimmed)
 	}
-	parts := strings.Split(env, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if s := strings.TrimSpace(p); s != "" {
-			out = append(out, s)
-			log.Printf("[CORS] ✅ Origen permitido: %q", s)
+
+	for _, origin := range defaultOrigins {
+		addOrigin(origin)
+	}
+
+	if env == "" {
+		log.Printf("[CORS] FRONT_ORIGINS vacio, usando defaults locales: %v", defaultOrigins)
+	} else {
+		for _, part := range strings.Split(env, ",") {
+			addOrigin(part)
 		}
 	}
-	log.Printf("[CORS] Total de orígenes permitidos: %d", len(out))
+
+	log.Printf("[CORS] Total de origenes permitidos: %d", len(out))
 	return out
 }
 
@@ -94,10 +119,9 @@ func main() {
 	}
 	log.Printf("[CORS] Configuración aplicada con %d orígenes permitidos", len(allowedOrigins))
 
-	router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{})
-
-	// Aplicar CORS como PRIMER middleware (crítico para que funcione correctamente)
-	router.Use(cors.New(corsCfg))
+	router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{
+		Middlewares: []gin.HandlerFunc{cors.New(corsCfg)},
+	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
