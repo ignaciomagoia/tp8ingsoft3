@@ -148,7 +148,7 @@ jobs:
       - name: Prepare tags
         id: tags
         run: |
-          SHORT_SHA="${GITHUB_SHA:0:7}"
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
           BACK_TAG="tp8-backend:$SHORT_SHA"
           FRONT_REPO="tp8-frontend"
           echo "back_tag=$BACK_TAG" >> $GITHUB_OUTPUT
