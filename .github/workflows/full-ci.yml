@@ -252,11 +252,12 @@ jobs:
       - name: Set backend PROD env
         run: |
           az webapp config appsettings set -g $RG -n tp8-back-prod \
-          --settings \
-            MONGO_URI="${{ secrets.MONGO_URI }}" \
-            FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_PROD }}" \
-            WEBSITES_PORT=8080
-            ASPNETCORE_URLS="http://0.0.0.0:8080"
+            --settings \
+              MONGO_URI="${{ secrets.MONGO_URI }}" \
+              FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_PROD }}" \
+              WEBSITES_PORT=8080 \
+              ASPNETCORE_URLS="http://0.0.0.0:8080"
+
 
 
       # ----- FRONTEND PROD -----
