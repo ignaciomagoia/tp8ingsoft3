@@ -141,35 +141,31 @@ jobs:
     needs: [backend-tests, frontend-tests, sonarcloud-analysis, e2e-tests]
 
     outputs:
-      back_tag: ${{ steps.tags.outputs.back_tag }}
-      front_tag: ${{ steps.tags.outputs.front_tag }}
+      SHA7: ${{ steps.vars.outputs.SHA7 }}
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Compute SHA7
+        id: vars
+        run: echo "SHA7=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_OUTPUT
+
       - name: Login to ACR
         run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
 
-      - name: Prepare tags
-        id: tags
-        run: |
-          SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          echo "back_tag=$SHA" >> $GITHUB_OUTPUT
-          echo "front_tag=$SHA" >> $GITHUB_OUTPUT
-
       - name: Build & push backend
         run: |
-          docker build -t "$ACR_LOGIN/tp8-backend:${{ steps.tags.outputs.back_tag }}" \
+          docker build -t "$ACR_LOGIN/tp8-backend:${{ steps.vars.outputs.SHA7 }}" \
             -f backend/dockerfile backend
-          docker push "$ACR_LOGIN/tp8-backend:${{ steps.tags.outputs.back_tag }}"
+          docker push "$ACR_LOGIN/tp8-backend:${{ steps.vars.outputs.SHA7 }}"
 
       - name: Build & push frontend (QA version)
         run: |
-          docker build -t "$ACR_LOGIN/tp8-frontend:${{ steps.tags.outputs.front_tag }}" \
+          docker build -t "$ACR_LOGIN/tp8-frontend:${{ steps.vars.outputs.SHA7 }}" \
             -f frontend/dockerfile \
             --build-arg VITE_API_URL="https://tp8-back-qa.azurewebsites.net" \
             frontend
-          docker push "$ACR_LOGIN/tp8-frontend:${{ steps.tags.outputs.front_tag }}"
+          docker push "$ACR_LOGIN/tp8-frontend:${{ steps.vars.outputs.SHA7 }}"
 
 # =====================================================================
 #                            QA DEPLOY
@@ -185,12 +181,12 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # ----- Backend QA -----
-      - name: Deploy backend QA (container settings)
+      # ---- Backend QA ----
+      - name: Deploy backend QA
         run: |
           az webapp config container set \
             -g $RG -n tp8-back-qa \
-            --docker-custom-image-name "$ACR_LOGIN/tp8-backend:${{ needs.build_and_push.outputs.back_tag }}" \
+            --docker-custom-image-name "$ACR_LOGIN/tp8-backend:${{ needs.build_and_push.outputs.SHA7 }}" \
             --docker-registry-server-url "https://$ACR_LOGIN" \
             --docker-registry-server-user "$ACR_USER" \
             --docker-registry-server-password "$ACR_PASS"
@@ -207,12 +203,12 @@ jobs:
       - name: Restart backend QA
         run: az webapp restart -g $RG -n tp8-back-qa
 
-      # ----- Frontend QA -----
-      - name: Deploy frontend QA (container settings)
+      # ---- Frontend QA ----
+      - name: Deploy frontend QA
         run: |
           az webapp config container set \
             -g $RG -n tp8-front-qa \
-            --docker-custom-image-name "$ACR_LOGIN/tp8-frontend:${{ needs.build_and_push.outputs.front_tag }}" \
+            --docker-custom-image-name "$ACR_LOGIN/tp8-frontend:${{ needs.build_and_push.outputs.SHA7 }}" \
             --docker-registry-server-url "https://$ACR_LOGIN" \
             --docker-registry-server-user "$ACR_USER" \
             --docker-registry-server-password "$ACR_PASS"
@@ -252,17 +248,12 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - uses: actions/checkout@v4
-
-      - name: Login to ACR
-        run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
-
       # ----- Backend PROD -----
-      - name: Deploy backend PROD (container settings)
+      - name: Deploy backend PROD
         run: |
           az webapp config container set \
             -g $RG -n tp8-back-prod \
-            --docker-custom-image-name "$ACR_LOGIN/tp8-backend:${{ needs.build_and_push.outputs.back_tag }}" \
+            --docker-custom-image-name "$ACR_LOGIN/tp8-backend:${{ needs.build_and_push.outputs.SHA7 }}" \
             --docker-registry-server-url "https://$ACR_LOGIN" \
             --docker-registry-server-user "$ACR_USER" \
             --docker-registry-server-password "$ACR_PASS"
@@ -295,7 +286,7 @@ jobs:
 
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
-      - name: Deploy frontend PROD (container settings)
+      - name: Deploy frontend PROD
         run: |
           az webapp config container set \
             -g $RG -n tp8-front-prod \
