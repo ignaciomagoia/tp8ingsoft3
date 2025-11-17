@@ -19,6 +19,7 @@ env:
 # =====================================================================
 jobs:
 
+  # -------------------- BACKEND TESTS --------------------
   backend-tests:
     name: Backend tests
     runs-on: ubuntu-latest
@@ -26,6 +27,7 @@ jobs:
       run:
         shell: bash
         working-directory: backend
+
     steps:
       - uses: actions/checkout@v4
 
@@ -42,6 +44,8 @@ jobs:
           name: backend-coverage
           path: backend/coverage.out
 
+
+  # -------------------- FRONTEND TESTS --------------------
   frontend-tests:
     name: Frontend tests
     runs-on: ubuntu-latest
@@ -49,6 +53,7 @@ jobs:
       run:
         shell: bash
         working-directory: frontend
+
     steps:
       - uses: actions/checkout@v4
 
@@ -66,6 +71,8 @@ jobs:
           name: frontend-coverage-report
           path: frontend/coverage/lcov-report
 
+
+  # -------------------- SONARCLOUD --------------------
   sonarcloud-analysis:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
@@ -92,6 +99,8 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+
+  # -------------------- CYPRESS E2E --------------------
   e2e-tests:
     name: E2E tests (Cypress)
     runs-on: ubuntu-latest
@@ -127,9 +136,8 @@ jobs:
           if-no-files-found: ignore
 
 # =====================================================================
-#                             CD STAGES
+#                       BUILD & PUSH IMAGES
 # =====================================================================
-
   build_and_push:
     name: Build & Push Docker images
     runs-on: ubuntu-latest
@@ -137,7 +145,7 @@ jobs:
 
     outputs:
       back_tag: ${{ steps.tags.outputs.back_tag }}
-      front_repo: ${{ steps.tags.outputs.front_repo }}
+      front_tag: ${{ steps.tags.outputs.front_tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -148,43 +156,28 @@ jobs:
       - name: Prepare tags
         id: tags
         run: |
-          set -euo pipefail
-          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          if [[ -z "$SHORT_SHA" ]]; then
-            echo "SHORT_SHA no puede estar vacio" >&2
-            exit 1
-          fi
-
-          BACK_TAG="tp8-backend:${SHORT_SHA}"
-          FRONT_REPO="tp8-frontend"
-
-          if [[ -z "$BACK_TAG" ]]; then
-            echo "BACK_TAG no puede estar vacio" >&2
-            exit 1
-          fi
-
-          echo "back_tag=$BACK_TAG" >> "$GITHUB_OUTPUT"
-          echo "front_repo=$FRONT_REPO" >> "$GITHUB_OUTPUT"
-
-          echo "BACK_TAG=$BACK_TAG" >> "$GITHUB_ENV"
-          echo "FRONT_REPO=$FRONT_REPO" >> "$GITHUB_ENV"
+          SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          echo "back_tag=tp8-backend:${SHA}" >> $GITHUB_OUTPUT
+          echo "front_tag=tp8-frontend:${SHA}" >> $GITHUB_OUTPUT
 
       - name: Build & push backend
         run: |
-          set -euo pipefail
-          if [[ -z "${BACK_TAG:-}" ]]; then
-            echo "BACK_TAG no esta definido" >&2
-            exit 1
-          fi
-          docker build -t "$ACR_LOGIN/${BACK_TAG}" -f backend/dockerfile backend
-          docker push "$ACR_LOGIN/${BACK_TAG}"
+          docker build -t "$ACR_LOGIN/tp8-backend:${{ steps.tags.outputs.back_tag }}" -f backend/dockerfile backend
+          docker push "$ACR_LOGIN/tp8-backend:${{ steps.tags.outputs.back_tag }}"
+
+      - name: Build & push frontend (build only)
+        run: |
+          docker build -t "$ACR_LOGIN/tp8-frontend:${{ steps.tags.outputs.front_tag }}" \
+            -f frontend/dockerfile \
+            --build-arg VITE_API_URL="https://tp8-back-qa.azurewebsites.net" \
+            frontend
+          docker push "$ACR_LOGIN/tp8-frontend:${{ steps.tags.outputs.front_tag }}"
 
 # =====================================================================
-#                          QA DEPLOY (ACI)
+#                            QA DEPLOY
 # =====================================================================
-
   deploy_qa:
-    name: Deploy QA (ACI)
+    name: Deploy to QA Web Apps
     runs-on: ubuntu-latest
     needs: build_and_push
     environment: qa
@@ -194,96 +187,85 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - uses: actions/checkout@v4
-
-      - name: Login to ACR
-        run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
-
-      - name: Backend QA
-        id: beqa
+      # ---- Backend QA ----
+      - name: Update backend QA container
         run: |
-          az container delete -g $RG -n tp8-back-qa -y || true
-          IMG="$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}"
-          az container create -g $RG -n tp8-back-qa \
-            --image "$IMG" \
-            --cpu 1 --memory 1.5 --ports 8080 \
-            --dns-name-label "tp8-back-qa-${GITHUB_RUN_NUMBER}" \
-            --registry-login-server "$ACR_LOGIN" \
-            --registry-username "$ACR_USER" \
-            --registry-password "$ACR_PASS" \
-            --environment-variables \
-                MONGO_URI="${{ secrets.MONGO_URI }}" \
-                PORT=8080 \
-                FRONT_ORIGINS="*"
-          FQDN=$(az container show -g $RG -n tp8-back-qa --query ipAddress.fqdn -o tsv)
-          echo "fqdn=$FQDN" >> $GITHUB_OUTPUT
+          az webapp config container set \
+            -g $RG -n tp8-back-qa \
+            --docker-custom-image-name "$ACR_LOGIN/tp8-backend:${{ needs.build_and_push.outputs.back_tag }}" \
+            --docker-registry-server-url "https://$ACR_LOGIN" \
+            --docker-registry-server-user "$ACR_USER" \
+            --docker-registry-server-password "$ACR_PASS"
 
-      - name: Build & push frontend QA
-        id: feqa
+      - name: Set backend QA appsettings
         run: |
-          API_URL="http://${{ steps.beqa.outputs.fqdn }}:8080"
-          IMG="$ACR_LOGIN/${{ needs.build_and_push.outputs.front_repo }}:qa-${GITHUB_RUN_NUMBER}"
-          docker build -t "$IMG" -f frontend/dockerfile --build-arg VITE_API_URL="$API_URL" frontend
-          docker push "$IMG"
-          echo "img=$IMG" >> $GITHUB_OUTPUT
+          az webapp config appsettings set \
+            -g $RG -n tp8-back-qa \
+            --settings \
+              MONGO_URI="${{ secrets.MONGO_URI }}" \
+              FRONT_ORIGINS="*" \
+              WEBSITES_PORT=8080 \
+              DOCKER_ENABLE_CI=true
 
-      - name: Deploy frontend QA
+      - name: Restart backend QA
+        run: az webapp restart -g $RG -n tp8-back-qa
+
+      # ---- Frontend QA ----
+      - name: Update frontend QA image
         run: |
-          az container delete -g $RG -n tp8-front-qa -y || true
-          az container create -g $RG -n tp8-front-qa \
-            --image "${{ steps.feqa.outputs.img }}" \
-            --cpu 1 --memory 1 --ports 80 \
-            --dns-name-label "tp8-front-qa-${GITHUB_RUN_NUMBER}" \
-            --registry-login-server "$ACR_LOGIN" \
-            --registry-username "$ACR_USER" \
-            --registry-password "$ACR_PASS"
+          az webapp config container set \
+            -g $RG -n tp8-front-qa \
+            --docker-custom-image-name "$ACR_LOGIN/tp8-frontend:${{ needs.build_and_push.outputs.front_tag }}" \
+            --docker-registry-server-url "https://$ACR_LOGIN" \
+            --docker-registry-server-user "$ACR_USER" \
+            --docker-registry-server-password "$ACR_PASS"
+
+      - name: Set frontend QA env
+        run: |
+          az webapp config appsettings set \
+            -g $RG -n tp8-front-qa \
+            --settings \
+              VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
+
+      - name: Restart frontend QA
+        run: az webapp restart -g $RG -n tp8-front-qa
 
 # =====================================================================
 #                           APPROVAL GATE
 # =====================================================================
-
   approve_prod:
-    name: Approval Gate for PROD
+    name: Approval Gate
     runs-on: ubuntu-latest
     needs: deploy_qa
     environment: prod
+
     steps:
-      - run: echo "Esperando aprobación manual para despliegue a PROD..."
+      - run: echo "Esperando aprobación para PROD..."
 
 # =====================================================================
-#                        PROD DEPLOY (APP SERVICE)
+#                           PROD DEPLOY
 # =====================================================================
-
   deploy_prod:
-    name: Deploy PROD (App Service)
+    name: Deploy to PROD
     runs-on: ubuntu-latest
     needs: approve_prod
 
     steps:
-      - uses: actions/checkout@v4
-
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Login to ACR
-        run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
-
-      # ----------------- PLAN (una sola vez) -----------------
-      - name: Ensure App Service plan
+      # ---- BACKEND PROD ----
+      - name: Update backend PROD container
         run: |
-          az appservice plan create \
-            -g $RG -n asp-tp8-prod \
-            --is-linux --sku B1 \
-            --location "$REGION" || true
+          az webapp config container set \
+            -g $RG -n tp8-back-prod \
+            --docker-custom-image-name "$ACR_LOGIN/tp8-backend:${{ needs.build_and_push.outputs.back_tag }}" \
+            --docker-registry-server-url "https://$ACR_LOGIN" \
+            --docker-registry-server-user "$ACR_USER" \
+            --docker-registry-server-password "$ACR_PASS"
 
-      # ----------------- BACKEND WEBAPP -----------------
-      - name: Ensure backend exists
-        run: |
-          az webapp show -g $RG -n tp8-back-prod || \
-          az webapp create -g $RG -p asp-tp8-prod -n tp8-back-prod --runtime "DOTNETCORE:8"
-
-      - name: Set backend appsettings
+      - name: Set backend PROD settings
         run: |
           az webapp config appsettings set \
             -g $RG -n tp8-back-prod \
@@ -291,24 +273,13 @@ jobs:
               MONGO_URI="${{ secrets.MONGO_URI }}" \
               FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_PROD }}" \
               WEBSITES_PORT=8080 \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
               DOCKER_ENABLE_CI=true
 
-      - name: Update backend container image
-        run: |
-          IMG="$ACR_LOGIN/${{ needs.build_and_push.outputs.back_tag }}"
-          az webapp config container set \
-            -g $RG -n tp8-back-prod \
-            --docker-custom-image-name "$IMG" \
-            --docker-registry-server-url "https://$ACR_LOGIN" \
-            --docker-registry-server-user "$ACR_USER" \
-            --docker-registry-server-password "$ACR_PASS"
-
-      - name: Restart backend
+      - name: Restart backend prod
         run: az webapp restart -g $RG -n tp8-back-prod
 
-      # ----------------- FRONTEND PROD -----------------
-      - name: Build & Push frontend PROD
+      # ---- FRONTEND PROD ----
+      - name: Build & push frontend PROD
         id: feprod
         run: |
           BACK_URL="https://tp8-back-prod.azurewebsites.net"
@@ -317,12 +288,7 @@ jobs:
           docker push "$IMG"
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
-      - name: Ensure frontend exists
-        run: |
-          az webapp show -g $RG -n tp8-front-prod || \
-          az webapp create -g $RG -p asp-tp8-prod -n tp8-front-prod --runtime "DOTNETCORE:8"
-
-      - name: Deploy frontend PROD
+      - name: Update frontend PROD container
         run: |
           az webapp config container set \
             -g $RG -n tp8-front-prod \
@@ -330,13 +296,16 @@ jobs:
             --docker-registry-server-url "https://$ACR_LOGIN" \
             --docker-registry-server-user "$ACR_USER" \
             --docker-registry-server-password "$ACR_PASS"
+
+      - name: Set frontend PROD env
+        run: |
           az webapp config appsettings set \
             -g $RG -n tp8-front-prod \
             --settings VITE_API_URL="https://tp8-back-prod.azurewebsites.net"
 
-      - name: Mostrar URL pública
+      - name: Mostrar URL final
         run: |
           echo "====================================="
-          echo "🚀 DEPLOY COMPLETO EN PRODUCCIÓN"
+          echo "      🚀 DEPLOY COMPLETO EN PROD"
           echo "👉 https://tp8-front-prod.azurewebsites.net"
           echo "====================================="
