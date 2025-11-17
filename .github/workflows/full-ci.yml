@@ -152,7 +152,7 @@ jobs:
           name: backend-app
           path: backend/app
 
-      # FRONTEND BUILD
+      # FRONTEND BUILD (Create React App → usa build/)
       - name: Build frontend
         working-directory: frontend
         run: |
@@ -162,8 +162,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: frontend-dist
-          path: frontend/dist
+          name: frontend-build
+          path: frontend/build
 
 
 # =====================================================================
@@ -180,6 +180,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Descargar artifacts
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
@@ -187,8 +188,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: frontend-dist
-          path: frontend/dist
+          name: frontend-build
+          path: frontend/build
 
       # BACKEND QA
       - uses: azure/webapps-deploy@v2
@@ -209,7 +210,7 @@ jobs:
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-qa
-          package: frontend/dist
+          package: frontend/build
 
       - name: Set frontend QA env
         run: |
@@ -245,6 +246,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Descargar artifacts
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
@@ -252,8 +254,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: frontend-dist
-          path: frontend/dist
+          name: frontend-build
+          path: frontend/build
 
       # BACKEND PROD
       - uses: azure/webapps-deploy@v2
@@ -274,7 +276,7 @@ jobs:
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-prod
-          package: frontend/dist
+          package: frontend/build
 
       - name: Set frontend PROD env
         run: |
