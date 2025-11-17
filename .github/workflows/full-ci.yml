@@ -9,7 +9,6 @@ on:
 
 env:
   RG: rg-tp8-cicd
-  REGION: "mexico central"
 
 # =====================================================================
 #                               CI STAGES
@@ -41,6 +40,7 @@ jobs:
           name: backend-coverage
           path: backend/coverage.out
 
+
   # -------------------- FRONTEND TESTS --------------------
   frontend-tests:
     name: Frontend tests
@@ -66,6 +66,7 @@ jobs:
         with:
           name: frontend-coverage-report
           path: frontend/coverage/lcov-report
+
 
   # -------------------- SONARCLOUD --------------------
   sonarcloud-analysis:
@@ -93,6 +94,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
   # -------------------- CYPRESS E2E --------------------
   e2e-tests:
@@ -128,10 +130,10 @@ jobs:
             frontend/cypress/screenshots
           if-no-files-found: ignore
 
+
 # =====================================================================
 #                             BUILD ARTIFACTS
 # =====================================================================
-
   build_artifacts:
     name: Build artifacts (Back & Front)
     runs-on: ubuntu-latest
@@ -162,6 +164,7 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
+
 # =====================================================================
 #                                   QA DEPLOY
 # =====================================================================
@@ -175,6 +178,16 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-app
+          path: backend
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
 
       # BACKEND QA
       - uses: azure/webapps-deploy@v2
@@ -203,6 +216,7 @@ jobs:
             -g $RG -n tp8-front-qa \
             --settings VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
 
+
 # =====================================================================
 #                            APPROVAL STEP
 # =====================================================================
@@ -214,6 +228,7 @@ jobs:
 
     steps:
       - run: echo "Esperando aprobación…"
+
 
 # =====================================================================
 #                                   PROD DEPLOY
@@ -228,6 +243,16 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-app
+          path: backend
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
 
       # BACKEND PROD
       - uses: azure/webapps-deploy@v2
