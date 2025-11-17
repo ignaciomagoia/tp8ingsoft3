@@ -249,6 +249,7 @@ jobs:
     name: Deploy to PROD
     runs-on: ubuntu-latest
     needs: approve_prod
+    environment: prod
 
     steps:
       - uses: azure/login@v2
