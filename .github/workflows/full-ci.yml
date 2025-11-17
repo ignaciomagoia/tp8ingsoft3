@@ -271,6 +271,7 @@ jobs:
         run: az webapp restart -g $RG -n tp8-back-prod
 
       # ----- FRONTEND PROD -----
+      - uses: actions/checkout@v4
       - name: Build frontend PROD image
         id: feprod
         run: |
