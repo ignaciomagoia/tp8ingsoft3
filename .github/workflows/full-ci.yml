@@ -186,31 +186,45 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       # ----- Backend QA -----
-      - name: Deploy backend QA
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: tp8-back-qa
-          images: ${{ env.ACR_LOGIN }}/tp8-backend:${{ needs.build_and_push.outputs.back_tag }}
+      - name: Deploy backend QA (container settings)
+        run: |
+          az webapp config container set \
+            -g $RG -n tp8-back-qa \
+            --docker-custom-image-name "$ACR_LOGIN/tp8-backend:${{ needs.build_and_push.outputs.back_tag }}" \
+            --docker-registry-server-url "https://$ACR_LOGIN" \
+            --docker-registry-server-user "$ACR_USER" \
+            --docker-registry-server-password "$ACR_PASS"
 
       - name: Set backend QA env
         run: |
-          az webapp config appsettings set -g $RG -n tp8-back-qa \
-          --settings \
-            MONGO_URI="${{ secrets.MONGO_URI }}" \
-            FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_QA }}" \
-            WEBSITES_PORT=8080
+          az webapp config appsettings set \
+            -g $RG -n tp8-back-qa \
+            --settings \
+              MONGO_URI="${{ secrets.MONGO_URI }}" \
+              FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_QA }}" \
+              WEBSITES_PORT=8080
+
+      - name: Restart backend QA
+        run: az webapp restart -g $RG -n tp8-back-qa
 
       # ----- Frontend QA -----
-      - name: Deploy frontend QA
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: tp8-front-qa
-          images: ${{ env.ACR_LOGIN }}/tp8-frontend:${{ needs.build_and_push.outputs.front_tag }}
+      - name: Deploy frontend QA (container settings)
+        run: |
+          az webapp config container set \
+            -g $RG -n tp8-front-qa \
+            --docker-custom-image-name "$ACR_LOGIN/tp8-frontend:${{ needs.build_and_push.outputs.front_tag }}" \
+            --docker-registry-server-url "https://$ACR_LOGIN" \
+            --docker-registry-server-user "$ACR_USER" \
+            --docker-registry-server-password "$ACR_PASS"
 
       - name: Set frontend QA env
         run: |
-          az webapp config appsettings set -g $RG -n tp8-front-qa \
-          --settings VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
+          az webapp config appsettings set \
+            -g $RG -n tp8-front-qa \
+            --settings VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
+
+      - name: Restart frontend QA
+        run: az webapp restart -g $RG -n tp8-front-qa
 
 # =====================================================================
 #                           APPROVAL GATE
@@ -237,28 +251,33 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - uses: actions/checkout@v4
+
       - name: Login to ACR
         run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
 
-
       # ----- Backend PROD -----
-      - name: Deploy backend PROD
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: tp8-back-prod
-          images: ${{ env.ACR_LOGIN }}/tp8-backend:${{ needs.build_and_push.outputs.back_tag }}
+      - name: Deploy backend PROD (container settings)
+        run: |
+          az webapp config container set \
+            -g $RG -n tp8-back-prod \
+            --docker-custom-image-name "$ACR_LOGIN/tp8-backend:${{ needs.build_and_push.outputs.back_tag }}" \
+            --docker-registry-server-url "https://$ACR_LOGIN" \
+            --docker-registry-server-user "$ACR_USER" \
+            --docker-registry-server-password "$ACR_PASS"
 
       - name: Set backend PROD env
         run: |
-          az webapp config appsettings set -g $RG -n tp8-back-prod \
+          az webapp config appsettings set \
+            -g $RG -n tp8-back-prod \
             --settings \
               MONGO_URI="${{ secrets.MONGO_URI }}" \
               FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_PROD }}" \
-              WEBSITES_PORT=8080 \
-              ASPNETCORE_URLS="http://0.0.0.0:8080"
+              WEBSITES_PORT=8080
 
-
+      - name: Restart backend PROD
+        run: az webapp restart -g $RG -n tp8-back-prod
 
       # ----- FRONTEND PROD -----
       - name: Build frontend PROD image
@@ -276,16 +295,23 @@ jobs:
 
           echo "img=$IMG" >> $GITHUB_OUTPUT
 
-      - name: Deploy frontend PROD
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: tp8-front-prod
-          images: ${{ steps.feprod.outputs.img }}
+      - name: Deploy frontend PROD (container settings)
+        run: |
+          az webapp config container set \
+            -g $RG -n tp8-front-prod \
+            --docker-custom-image-name "${{ steps.feprod.outputs.img }}" \
+            --docker-registry-server-url "https://$ACR_LOGIN" \
+            --docker-registry-server-user "$ACR_USER" \
+            --docker-registry-server-password "$ACR_PASS"
 
       - name: Set frontend PROD env
         run: |
-          az webapp config appsettings set -g $RG -n tp8-front-prod \
-          --settings VITE_API_URL="https://tp8-back-prod.azurewebsites.net"
+          az webapp config appsettings set \
+            -g $RG -n tp8-front-prod \
+            --settings VITE_API_URL="https://tp8-back-prod.azurewebsites.net"
+
+      - name: Restart frontend PROD
+        run: az webapp restart -g $RG -n tp8-front-prod
 
       - name: Mostrar URL final
         run: |
