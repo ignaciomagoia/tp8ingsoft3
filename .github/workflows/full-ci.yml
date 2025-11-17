@@ -237,6 +237,7 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - uses: actions/checkout@v4
 
       # ----- Backend PROD -----
       - name: Deploy backend PROD
