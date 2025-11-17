@@ -15,7 +15,7 @@ env:
 # =====================================================================
 jobs:
 
-  # -------------------- BACKEND TESTS --------------------
+  # ---------------- BACKEND TESTS ----------------
   backend-tests:
     name: Backend tests
     runs-on: ubuntu-latest
@@ -41,7 +41,7 @@ jobs:
           path: backend/coverage.out
 
 
-  # -------------------- FRONTEND TESTS --------------------
+  # ---------------- FRONTEND TESTS ----------------
   frontend-tests:
     name: Frontend tests
     runs-on: ubuntu-latest
@@ -68,7 +68,7 @@ jobs:
           path: frontend/coverage/lcov-report
 
 
-  # -------------------- SONARCLOUD --------------------
+  # ---------------- SONARCLOUD ----------------
   sonarcloud-analysis:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
@@ -96,7 +96,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
-  # -------------------- CYPRESS E2E --------------------
+  # ---------------- CYPRESS E2E ----------------
   e2e-tests:
     name: E2E tests (Cypress)
     runs-on: ubuntu-latest
@@ -132,7 +132,7 @@ jobs:
 
 
 # =====================================================================
-#                             BUILD ARTIFACTS
+#                         BUILD ARTIFACTS
 # =====================================================================
   build_artifacts:
     name: Build artifacts (Back & Front)
@@ -142,7 +142,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # BACKEND BUILD
+      # ---- BACKEND BUILD ----
       - name: Build backend
         working-directory: backend
         run: go build -o app .
@@ -152,7 +152,7 @@ jobs:
           name: backend-app
           path: backend/app
 
-      # FRONTEND BUILD (Create React App → usa build/)
+      # ---- FRONTEND BUILD ----
       - name: Build frontend
         working-directory: frontend
         run: |
@@ -167,7 +167,7 @@ jobs:
 
 
 # =====================================================================
-#                                   QA DEPLOY
+#                         DEPLOY QA
 # =====================================================================
   deploy_qa:
     name: Deploy QA Web Apps
@@ -180,23 +180,23 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Descargar artifacts
+      # ---- DESCARGAR BACKEND ----
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
           path: backend
 
+      # ---- DESCARGAR FRONTEND ----
       - uses: actions/download-artifact@v4
         with:
           name: frontend-build
-          path: frontend/build
+          path: frontend
 
-      # BACKEND QA
+      # ---- DEPLOY BACKEND QA ----
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-qa
-          package: backend/backend-app/app
-
+          package: backend/app
 
       - name: Set backend QA env
         run: |
@@ -207,7 +207,7 @@ jobs:
               MONGO_URI="${{ secrets.MONGO_URI }}" \
               FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_QA }}"
 
-      # FRONTEND QA
+      # ---- DEPLOY FRONTEND QA ----
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-qa
@@ -217,11 +217,12 @@ jobs:
         run: |
           az webapp config appsettings set \
             -g $RG -n tp8-front-qa \
-            --settings VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
+            --settings \
+              VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
 
 
 # =====================================================================
-#                            APPROVAL STEP
+#                       APPROVAL GATE
 # =====================================================================
   approve_prod:
     name: Approval Gate
@@ -234,7 +235,7 @@ jobs:
 
 
 # =====================================================================
-#                                   PROD DEPLOY
+#                         DEPLOY PROD
 # =====================================================================
   deploy_prod:
     name: Deploy PROD Web Apps
@@ -247,23 +248,23 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Descargar artifacts
+      # ---- DESCARGAR BACKEND ----
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
           path: backend
 
+      # ---- DESCARGAR FRONTEND ----
       - uses: actions/download-artifact@v4
         with:
           name: frontend-build
-          path: frontend/build
+          path: frontend
 
-      # BACKEND PROD
+      # ---- DEPLOY BACKEND PROD ----
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-prod
-          package: backend/backend-app/app
-
+          package: backend/app
 
       - name: Set backend PROD env
         run: |
@@ -274,7 +275,7 @@ jobs:
               MONGO_URI="${{ secrets.MONGO_URI }}" \
               FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_PROD }}"
 
-      # FRONTEND PROD
+      # ---- DEPLOY FRONTEND PROD ----
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-prod
