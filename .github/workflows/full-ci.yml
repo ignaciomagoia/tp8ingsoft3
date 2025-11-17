@@ -248,6 +248,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: approve_prod
     environment: prod
+    env:
+      FRONT_ORIGINS_PROD: ${{ secrets.FRONT_ORIGINS_PROD }}
+      MONGO_URI: ${{ secrets.MONGO_URI }}
 
     steps:
       - uses: azure/login@v2
