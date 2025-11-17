@@ -195,7 +195,8 @@ jobs:
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-qa
-          package: backend/app
+          package: backend/backend-app/app
+
 
       - name: Set backend QA env
         run: |
@@ -261,7 +262,8 @@ jobs:
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-prod
-          package: backend/app
+          package: backend/backend-app/app
+
 
       - name: Set backend PROD env
         run: |
