@@ -15,7 +15,7 @@ env:
   ACR_PASS: ${{ secrets.ACR_PASSWORD }}
 
 # =====================================================================
-#                              CI STAGES
+#                           CI STAGES
 # =====================================================================
 jobs:
 
@@ -118,7 +118,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - run: npm ci
-
       - run: npm run e2e
         env:
           CYPRESS_BASE_URL: http://localhost:3000
@@ -133,7 +132,7 @@ jobs:
           if-no-files-found: ignore
 
 # =====================================================================
-#                       BUILD & PUSH IMAGES
+#                    BUILD & PUSH IMAGES (SHA TAG)
 # =====================================================================
   build_and_push:
     name: Build & Push Docker images
@@ -141,34 +140,35 @@ jobs:
     needs: [backend-tests, frontend-tests, sonarcloud-analysis, e2e-tests]
 
     outputs:
-      SHA7: ${{ steps.vars.outputs.SHA7 }}
+      SHA7: ${{ steps.tags.outputs.SHA7 }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Compute SHA7
-        id: vars
-        run: echo "SHA7=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_OUTPUT
-
       - name: Login to ACR
         run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
 
+      - name: Prepare SHA tag
+        id: tags
+        run: |
+          echo "SHA7=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
       - name: Build & push backend
         run: |
-          docker build -t "$ACR_LOGIN/tp8-backend:${{ steps.vars.outputs.SHA7 }}" \
+          docker build -t "$ACR_LOGIN/tp8-backend:${{ steps.tags.outputs.SHA7 }}" \
             -f backend/dockerfile backend
-          docker push "$ACR_LOGIN/tp8-backend:${{ steps.vars.outputs.SHA7 }}"
+          docker push "$ACR_LOGIN/tp8-backend:${{ steps.tags.outputs.SHA7 }}"
 
       - name: Build & push frontend (QA version)
         run: |
-          docker build -t "$ACR_LOGIN/tp8-frontend:${{ steps.vars.outputs.SHA7 }}" \
+          docker build -t "$ACR_LOGIN/tp8-frontend:${{ steps.tags.outputs.SHA7 }}" \
             -f frontend/dockerfile \
             --build-arg VITE_API_URL="https://tp8-back-qa.azurewebsites.net" \
             frontend
-          docker push "$ACR_LOGIN/tp8-frontend:${{ steps.vars.outputs.SHA7 }}"
+          docker push "$ACR_LOGIN/tp8-frontend:${{ steps.tags.outputs.SHA7 }}"
 
 # =====================================================================
-#                            QA DEPLOY
+#                               QA DEPLOY
 # =====================================================================
   deploy_qa:
     name: Deploy to QA Web Apps
@@ -181,7 +181,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # ---- Backend QA ----
+      # ----- Backend QA -----
       - name: Deploy backend QA
         run: |
           az webapp config container set \
@@ -203,7 +203,7 @@ jobs:
       - name: Restart backend QA
         run: az webapp restart -g $RG -n tp8-back-qa
 
-      # ---- Frontend QA ----
+      # ----- Frontend QA -----
       - name: Deploy frontend QA
         run: |
           az webapp config container set \
@@ -223,7 +223,7 @@ jobs:
         run: az webapp restart -g $RG -n tp8-front-qa
 
 # =====================================================================
-#                           APPROVAL GATE
+#                         APPROVAL STEP
 # =====================================================================
   approve_prod:
     name: Approval Gate
@@ -235,7 +235,7 @@ jobs:
       - run: echo "Esperando aprobación para PROD..."
 
 # =====================================================================
-#                           PROD DEPLOY
+#                          PROD DEPLOY
 # =====================================================================
   deploy_prod:
     name: Deploy to PROD
@@ -247,6 +247,11 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - uses: actions/checkout@v4   # <-- NECESARIO para el build frontend
+
+      - name: Login to ACR
+        run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
 
       # ----- Backend PROD -----
       - name: Deploy backend PROD
@@ -271,7 +276,6 @@ jobs:
         run: az webapp restart -g $RG -n tp8-back-prod
 
       # ----- FRONTEND PROD -----
-      - uses: actions/checkout@v4
       - name: Build frontend PROD image
         id: feprod
         run: |
