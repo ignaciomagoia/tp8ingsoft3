@@ -238,6 +238,9 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
       - uses: actions/checkout@v4
+      - name: Login to ACR
+        run: echo "$ACR_PASS" | docker login "$ACR_LOGIN" -u "$ACR_USER" --password-stdin
+
 
       # ----- Backend PROD -----
       - name: Deploy backend PROD
