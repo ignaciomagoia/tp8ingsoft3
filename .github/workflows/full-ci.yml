@@ -8,11 +8,13 @@ on:
   workflow_dispatch:
 
 env:
-  RG: rg-tp8-cicd
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/tp8-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/tp8-frontend
 
 # =====================================================================
 #                               CI STAGES
 # =====================================================================
+
 jobs:
 
   # ---------------- BACKEND TESTS ----------------
@@ -31,7 +33,8 @@ jobs:
         with:
           go-version: "1.24"
 
-      - run: |
+      - name: Run backend tests with coverage
+        run: |
           go test ./... -coverprofile=coverage.out
           go tool cover -func=coverage.out
 
@@ -39,7 +42,6 @@ jobs:
         with:
           name: backend-coverage
           path: backend/coverage.out
-
 
   # ---------------- FRONTEND TESTS ----------------
   frontend-tests:
@@ -67,7 +69,6 @@ jobs:
           name: frontend-coverage-report
           path: frontend/coverage/lcov-report
 
-
   # ---------------- SONARCLOUD ----------------
   sonarcloud-analysis:
     name: SonarCloud Analysis
@@ -94,7 +95,6 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 
   # ---------------- CYPRESS E2E ----------------
   e2e-tests:
@@ -130,104 +130,86 @@ jobs:
             frontend/cypress/screenshots
           if-no-files-found: ignore
 
+# =====================================================================
+#                      BUILD & PUSH DOCKER IMAGES
+# =====================================================================
 
-# =====================================================================
-#                         BUILD ARTIFACTS
-# =====================================================================
-  build_artifacts:
-    name: Build artifacts (Back & Front)
+  build_images:
+    name: Build & push Docker images (Back & Front)
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests, sonarcloud-analysis, e2e-tests]
 
     steps:
       - uses: actions/checkout@v4
 
-      # ---- BACKEND BUILD (ZIP!) ----
-      - name: Build backend
-        working-directory: backend
-        run: |
-          go build -o app .
-          zip -j app.zip app
-
-      - uses: actions/upload-artifact@v4
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
-          name: backend-app
-          path: backend/app.zip
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ---- FRONTEND BUILD (ZIP!) ----
-      - name: Build frontend
-        working-directory: frontend
+      # ---- BACKEND IMAGE ----
+      - name: Build backend image
         run: |
-          npm ci
-          npm run build
-          echo "Agregando web.config..."
-          cp web.config build/
-          zip -r build.zip build
+          docker build \
+            -f backend/Dockerfile \
+            -t $BACKEND_IMAGE:${{ github.sha }} \
+            backend
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/build.zip
+      - name: Tag backend image
+        run: |
+          docker tag $BACKEND_IMAGE:${{ github.sha }} $BACKEND_IMAGE:qa-latest
+          docker tag $BACKEND_IMAGE:${{ github.sha }} $BACKEND_IMAGE:prod-latest
 
+      - name: Push backend images
+        run: |
+          docker push $BACKEND_IMAGE:${{ github.sha }}
+          docker push $BACKEND_IMAGE:qa-latest
+          docker push $BACKEND_IMAGE:prod-latest
+
+      # ---- FRONTEND IMAGE ----
+      - name: Build frontend image
+        run: |
+          docker build \
+            -f frontend/Dockerfile \
+            -t $FRONTEND_IMAGE:${{ github.sha }} \
+            frontend
+
+      - name: Tag frontend image
+        run: |
+          docker tag $FRONTEND_IMAGE:${{ github.sha }} $FRONTEND_IMAGE:qa-latest
+          docker tag $FRONTEND_IMAGE:${{ github.sha }} $FRONTEND_IMAGE:prod-latest
+
+      - name: Push frontend images
+        run: |
+          docker push $FRONTEND_IMAGE:${{ github.sha }}
+          docker push $FRONTEND_IMAGE:qa-latest
+          docker push $FRONTEND_IMAGE:prod-latest
 
 # =====================================================================
-#                         DEPLOY QA
+#                         DEPLOY QA (RENDER)
 # =====================================================================
+
   deploy_qa:
-    name: Deploy QA Web Apps
+    name: Deploy QA Web Apps (Render)
     runs-on: ubuntu-latest
-    needs: build_artifacts
+    needs: build_images
     environment: qa
 
     steps:
-      - uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # ---- DESCARGAR BACKEND ----
-      - uses: actions/download-artifact@v4
-        with:
-          name: backend-app
-          path: backend/
-
-      # ---- DESCARGAR FRONTEND ----
-      - uses: actions/download-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/
-
-      # ---- DEPLOY BACKEND QA ----
-      - uses: azure/webapps-deploy@v2
-        with:
-          app-name: tp8-back-qa
-          package: backend/app.zip
-
-      - name: Set backend QA env
+      - name: Trigger Backend QA deploy (Render)
         run: |
-          az webapp config appsettings set \
-            -g $RG -n tp8-back-qa \
-            --settings \
-              PORT=8080 \
-              GO_ENV=production \
-              MONGO_URI="${{ secrets.MONGO_URI_QA }}" \
-              FRONT_ORIGINS="https://tp8-front-qa.azurewebsites.net"
+          curl -X POST "${{ secrets.RENDER_BACKEND_QA_HOOK }}"
 
-      # ---- DEPLOY FRONTEND QA ----
-      - uses: azure/webapps-deploy@v2
-        with:
-          app-name: tp8-front-qa
-          package: frontend/build.zip
-
-      - name: Set frontend QA env
+      - name: Trigger Frontend QA deploy (Render)
         run: |
-          az webapp config appsettings set \
-            -g $RG -n tp8-front-qa \
-            --settings VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
-
+          curl -X POST "${{ secrets.RENDER_FRONTEND_QA_HOOK }}"
 
 # =====================================================================
-#                       APPROVAL GATE
+#                       APPROVAL GATE (PROD)
 # =====================================================================
+
   approve_prod:
     name: Approval Gate
     runs-on: ubuntu-latest
@@ -235,65 +217,30 @@ jobs:
     environment: prod
 
     steps:
-      - run: echo "Esperando aprobación para PROD…"
-
+      - run: echo "Esperando aprobación manual para desplegar en PROD…"
 
 # =====================================================================
-#                         DEPLOY PROD
+#                         DEPLOY PROD (RENDER)
 # =====================================================================
+
   deploy_prod:
-    name: Deploy PROD Web Apps
+    name: Deploy PROD Web Apps (Render)
     runs-on: ubuntu-latest
     needs: approve_prod
     environment: prod
 
     steps:
-      - uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # ---- DESCARGAR BACKEND ----
-      - uses: actions/download-artifact@v4
-        with:
-          name: backend-app
-          path: backend/
-
-      # ---- DESCARGAR FRONTEND ----
-      - uses: actions/download-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/
-
-      # ---- DEPLOY BACKEND PROD ----
-      - uses: azure/webapps-deploy@v2
-        with:
-          app-name: tp8-back-prod
-          package: backend/app.zip
-
-      - name: Set backend PROD env
+      - name: Trigger Backend PROD deploy (Render)
         run: |
-          az webapp config appsettings set \
-            -g $RG -n tp8-back-prod \
-            --settings \
-              PORT=8080 \
-              GO_ENV=production \
-              MONGO_URI="${{ secrets.MONGO_URI_PROD }}" \
-              FRONT_ORIGINS="https://tp8-front-prod.azurewebsites.net"
+          curl -X POST "${{ secrets.RENDER_BACKEND_PROD_HOOK }}"
 
-      # ---- DEPLOY FRONTEND PROD ----
-      - uses: azure/webapps-deploy@v2
-        with:
-          app-name: tp8-front-prod
-          package: frontend/build.zip
-
-      - name: Set frontend PROD env
+      - name: Trigger Frontend PROD deploy (Render)
         run: |
-          az webapp config appsettings set \
-            -g $RG -n tp8-front-prod \
-            --settings VITE_API_URL="https://tp8-back-prod.azurewebsites.net"
+          curl -X POST "${{ secrets.RENDER_FRONTEND_PROD_HOOK }}"
 
-      - run: |
+      - name: Done
+        run: |
           echo "====================================="
           echo "       🚀 DEPLOY COMPLETO EN PROD"
-          echo "👉 https://tp8-front-prod.azurewebsites.net"
+          echo "👉 Frontend PROD en Render listo"
           echo "====================================="
