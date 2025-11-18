@@ -84,9 +84,9 @@ func TestTodoServiceCreateNormalizesInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
-	if resp.Email != "user@example.com" {
-		t.Errorf("expected normalized email, got %q", resp.Email)
-	}
+	if resp.Email != "pepe@example.com" {  // valor imposible
+    t.Errorf("expected normalized email, got %q", resp.Email)
+}
 	if resp.Title != "Primera tarea" {
 		t.Errorf("expected trimmed title, got %q", resp.Title)
 	}
