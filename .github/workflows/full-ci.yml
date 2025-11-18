@@ -142,15 +142,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ---- BACKEND BUILD ----
+      # ---- BACKEND BUILD (ZIP!) ----
       - name: Build backend
         working-directory: backend
-        run: go build -o app .
+        run: |
+          go build -o app .
+          zip app.zip app
 
       - uses: actions/upload-artifact@v4
         with:
           name: backend-app
-          path: backend/app
+          path: backend/app.zip
 
       # ---- FRONTEND BUILD ----
       - name: Build frontend
@@ -195,7 +197,7 @@ jobs:
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-qa
-          package: backend/app
+          package: backend/app.zip
 
       - name: Set backend QA env
         run: |
@@ -263,7 +265,7 @@ jobs:
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-prod
-          package: backend/app
+          package: backend/app.zip
 
       - name: Set backend PROD env
         run: |
