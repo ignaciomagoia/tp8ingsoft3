@@ -38,8 +38,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: backend-coverage
-          path: backend/coverage.out
+          name: backend-app
+          path: backend/app
 
 
   # ---------------- FRONTEND TESTS ----------------
@@ -56,11 +56,11 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Run frontend tests
+      - name: Run tests
         working-directory: frontend
         run: npm test -- --coverage --watchAll=false
 
@@ -91,8 +91,6 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
 
       - uses: SonarSource/sonarcloud-github-action@v2
-        with:
-          projectBaseDir: .
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -113,7 +111,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         working-directory: frontend
         run: npm ci
 
@@ -144,7 +142,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ---- BACKEND BUILD ----
+      # ---- BACKEND ----
       - name: Build backend
         working-directory: backend
         run: go build -o app .
@@ -154,7 +152,7 @@ jobs:
           name: backend-app
           path: backend/app
 
-      # ---- FRONTEND BUILD ----
+      # ---- FRONTEND ----
       - name: Build frontend
         working-directory: frontend
         run: |
@@ -171,7 +169,7 @@ jobs:
 #                         DEPLOY QA
 # =====================================================================
   deploy_qa:
-    name: Deploy QA Web Apps
+    name: Deploy QA
     runs-on: ubuntu-latest
     needs: build_artifacts
     environment: qa
@@ -181,25 +179,18 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # ---- Descargar backend ----
+      # ---- BACKEND ----
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
-          path: backend
+          path: .
 
-      # ---- Descargar frontend ----
-      - uses: actions/download-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend
-
-      # ---- Deploy backend QA ----
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-qa
-          package: backend/app
+          package: ./app
 
-      - name: Set backend QA env
+      - name: Set backend env
         run: |
           az webapp config appsettings set \
             -g $RG -n tp8-back-qa \
@@ -208,13 +199,18 @@ jobs:
               MONGO_URI="${{ secrets.MONGO_URI_QA }}" \
               FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_QA }}"
 
-      # ---- Deploy frontend QA ----
+      # ---- FRONTEND ----
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend
+
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-qa
           package: frontend/build
 
-      - name: Set frontend QA env
+      - name: Set frontend env
         run: |
           az webapp config appsettings set \
             -g $RG -n tp8-front-qa \
@@ -229,7 +225,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy_qa
     environment: prod
-
     steps:
       - run: echo "Esperando aprobación…"
 
@@ -238,7 +233,7 @@ jobs:
 #                         DEPLOY PROD
 # =====================================================================
   deploy_prod:
-    name: Deploy PROD Web Apps
+    name: Deploy PROD
     runs-on: ubuntu-latest
     needs: approve_prod
     environment: prod
@@ -248,21 +243,16 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # ---- BACKEND ----
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
-          path: backend
+          path: .
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend
-
-      # ---- Deploy backend PROD ----
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-prod
-          package: backend/app
+          package: ./app
 
       - name: Set backend PROD env
         run: |
@@ -273,7 +263,12 @@ jobs:
               MONGO_URI="${{ secrets.MONGO_URI_PROD }}" \
               FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_PROD }}"
 
-      # ---- Deploy frontend PROD ----
+      # ---- FRONTEND ----
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend
+
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-prod
