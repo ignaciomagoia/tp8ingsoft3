@@ -147,7 +147,7 @@ jobs:
         working-directory: backend
         run: |
           go build -o app .
-          zip app.zip app
+          zip -j app.zip app
 
       - uses: actions/upload-artifact@v4
         with:
