@@ -1,4 +1,4 @@
-module github.com/ignaciomagoia/tp6ingdesoft/backend
+module github.com/ignaciomagoia/tp8ingsoft3/backend
 
 go 1.23.0
 
