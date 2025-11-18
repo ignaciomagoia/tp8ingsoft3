@@ -154,17 +154,18 @@ jobs:
           name: backend-app
           path: backend/app.zip
 
-      # ---- FRONTEND BUILD ----
+      # ---- FRONTEND BUILD (ZIP!) ----
       - name: Build frontend
         working-directory: frontend
         run: |
           npm ci
           npm run build
+          zip -r build.zip build
 
       - uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: frontend/build
+          path: frontend/build.zip
 
 
 # =====================================================================
@@ -213,7 +214,7 @@ jobs:
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-qa
-          package: frontend/build
+          package: frontend/build.zip
 
       - name: Set frontend QA env
         run: |
@@ -281,7 +282,7 @@ jobs:
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-prod
-          package: frontend/build
+          package: frontend/build.zip
 
       - name: Set frontend PROD env
         run: |
