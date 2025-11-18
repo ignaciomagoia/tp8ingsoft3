@@ -1,234 +1,297 @@
-name: Full CI/CD Pipeline - TP08
+name: Full CI/CD Pipeline (QA → PROD)
 
 on:
   push:
-    branches: [ main ]
+    branches: ["main", "develop"]
   pull_request:
-    branches: [ main ]
+    branches: ["main", "develop"]
+  workflow_dispatch:
 
+env:
+  RG: rg-tp8-cicd
+
+# =====================================================================
+#                               CI STAGES
+# =====================================================================
 jobs:
 
-  ############################################
-  # 1) BACKEND TESTS
-  ############################################
-  backend_tests:
+  # ---------------- BACKEND TESTS ----------------
+  backend-tests:
+    name: Backend tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.24"
 
-      - name: Run backend tests
-        run: go test ./... -v
-        working-directory: backend
+      - run: |
+          go test ./... -coverprofile=coverage.out
+          go tool cover -func=coverage.out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.out
 
 
-  ############################################
-  # 2) FRONTEND TESTS
-  ############################################
-  frontend_tests:
+  # ---------------- FRONTEND TESTS ----------------
+  frontend-tests:
+    name: Frontend tests
     runs-on: ubuntu-latest
-    needs: backend_tests
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.x"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: frontend
+      - run: npm ci
+      - run: npm test -- --coverage --watchAll=false
 
-      - name: Run frontend tests
-        run: npm test -- --watchAll=false
-        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: frontend/coverage/lcov-report
 
 
-  ############################################
-  # 3) SONARCLOUD
-  ############################################
-  sonarqube:
+  # ---------------- SONARCLOUD ----------------
+  sonarcloud-analysis:
+    name: SonarCloud Analysis
     runs-on: ubuntu-latest
-    needs: frontend_tests
+    needs: [backend-tests, frontend-tests]
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: SonarCloud Analysis
-        uses: SonarSource/sonarcloud-github-action@master
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - uses: actions/cache@v3
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - uses: SonarSource/sonarcloud-github-action@v2
+        with:
+          projectBaseDir: .
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.projectKey=tp8ingsoft3
-            -Dsonar.organization=ignaciomagoia
-            -Dsonar.sources=.
-            -Dsonar.host.url=https://sonarcloud.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
-  ############################################
-  # 4) CYPRESS E2E
-  ############################################
-  e2e_tests:
+  # ---------------- CYPRESS E2E ----------------
+  e2e-tests:
+    name: E2E tests (Cypress)
     runs-on: ubuntu-latest
-    needs: sonarqube
+    needs: [backend-tests, frontend-tests]
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.x"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Install frontend
-        run: npm ci
-        working-directory: frontend
+      - run: npm ci
+      - run: npm run e2e
+        env:
+          CYPRESS_BASE_URL: http://localhost:3000
 
-      - name: Build frontend
-        run: npm run build
-        working-directory: frontend
-
-      - name: Install Cypress
-        run: npm install cypress --force
-        working-directory: frontend
-
-      - name: Run Cypress tests
-        run: npx cypress run
-        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cypress-artifacts
+          path: |
+            frontend/cypress/videos
+            frontend/cypress/screenshots
+          if-no-files-found: ignore
 
 
-  ############################################
-  # 5) BUILD ARTIFACTS (BACKEND + FRONTEND)
-  ############################################
+# =====================================================================
+#                         BUILD ARTIFACTS
+# =====================================================================
   build_artifacts:
+    name: Build artifacts (Back & Front)
     runs-on: ubuntu-latest
-    needs: e2e_tests
+    needs: [backend-tests, frontend-tests, sonarcloud-analysis, e2e-tests]
 
     steps:
       - uses: actions/checkout@v4
 
-      ### BACKEND ###
-      - uses: actions/setup-go@v4
-        with:
-          go-version: "1.22"
-
-      - name: Build backend binary
-        run: go build -o app .
+      # ---- BACKEND BUILD (ZIP!) ----
+      - name: Build backend
         working-directory: backend
+        run: |
+          go build -o app .
+          zip app.zip app
 
-      - name: Upload backend artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: backend-app
-          path: backend/app
+          path: backend/app.zip
 
-      ### FRONTEND ###
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: frontend
-
+      # ---- FRONTEND BUILD (ZIP!) ----
       - name: Build frontend
-        run: npm run build
         working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          zip -r build.zip build
 
-      - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: frontend/build/**
+          path: frontend/build.zip
 
 
-  ############################################
-  # 6) AUTO-DEPLOY QA
-  ############################################
+# =====================================================================
+#                         DEPLOY QA
+# =====================================================================
   deploy_qa:
+    name: Deploy QA Web Apps
     runs-on: ubuntu-latest
     needs: build_artifacts
+    environment: qa
 
     steps:
-      - name: Azure Login
-        uses: azure/login@v2
+      - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      ### BACKEND ###
+      # ---- DESCARGAR BACKEND ----
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
-          path: backend
+          path: backend/
 
-      - name: Deploy BACKEND to QA
-        uses: azure/webapps-deploy@v2
+      # ---- DESCARGAR FRONTEND ----
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/
+
+      # ---- DEPLOY BACKEND QA ----
+      - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-qa
-          package: backend/app
+          package: backend/app.zip
 
-      ### FRONTEND ###
-      - uses: actions/download-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend
+      - name: Set backend QA env
+        run: |
+          az webapp config appsettings set \
+            -g $RG -n tp8-back-qa \
+            --settings \
+              PORT=8080 \
+              GO_ENV=production \
+              MONGO_URI="${{ secrets.MONGO_URI_QA }}" \
+              FRONT_ORIGINS="https://tp8-front-qa.azurewebsites.net"
 
-      - name: Deploy FRONTEND to QA
-        uses: azure/webapps-deploy@v2
+      # ---- DEPLOY FRONTEND QA ----
+      - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-qa
-          package: frontend/build
+          package: frontend/build.zip
+
+      - name: Set frontend QA env
+        run: |
+          az webapp config appsettings set \
+            -g $RG -n tp8-front-qa \
+            --settings VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
 
 
-  ############################################
-  # 7) APPROVAL (MANUAL) COMO TP05
-  ############################################
-  approval_gate:
+# =====================================================================
+#                       APPROVAL GATE
+# =====================================================================
+  approve_prod:
+    name: Approval Gate
     runs-on: ubuntu-latest
     needs: deploy_qa
+    environment: prod
 
     steps:
-      - name: Manual Approval
-        run: |
-          echo "⚠ Esperando aprobación manual desde GitHub Actions..."
-          echo "Vaya a: Actions → el workflow → Review deployments → Approve"
+      - run: echo "Esperando aprobación para PROD…"
 
 
-  ############################################
-  # 8) DEPLOY TO PROD
-  ############################################
+# =====================================================================
+#                         DEPLOY PROD
+# =====================================================================
   deploy_prod:
+    name: Deploy PROD Web Apps
     runs-on: ubuntu-latest
-    needs: approval_gate
+    needs: approve_prod
+    environment: prod
 
     steps:
-      - name: Azure Login
-        uses: azure/login@v2
+      - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      ### BACKEND ###
+      # ---- DESCARGAR BACKEND ----
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
-          path: backend
+          path: backend/
 
-      - name: Deploy BACKEND to PROD
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: tp8-back-prod
-          package: backend/app
-
-      ### FRONTEND ###
+      # ---- DESCARGAR FRONTEND ----
       - uses: actions/download-artifact@v4
         with:
           name: frontend-build
-          path: frontend
+          path: frontend/
 
-      - name: Deploy FRONTEND to PROD
-        uses: azure/webapps-deploy@v2
+      # ---- DEPLOY BACKEND PROD ----
+      - uses: azure/webapps-deploy@v2
+        with:
+          app-name: tp8-back-prod
+          package: backend/app.zip
+
+      - name: Set backend PROD env
+        run: |
+          az webapp config appsettings set \
+            -g $RG -n tp8-back-prod \
+            --settings \
+              PORT=8080 \
+              GO_ENV=production \
+              MONGO_URI="${{ secrets.MONGO_URI_PROD }}" \
+              FRONT_ORIGINS="https://tp8-front-prod.azurewebsites.net"
+
+      # ---- DEPLOY FRONTEND PROD ----
+      - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-prod
-          package: frontend/build
+          package: frontend/build.zip
+
+      - name: Set frontend PROD env
+        run: |
+          az webapp config appsettings set \
+            -g $RG -n tp8-front-prod \
+            --settings VITE_API_URL="https://tp8-back-prod.azurewebsites.net"
+
+      - run: |
+          echo "====================================="
+          echo "       🚀 DEPLOY COMPLETO EN PROD"
+          echo "👉 https://tp8-front-prod.azurewebsites.net"
+          echo "====================================="
