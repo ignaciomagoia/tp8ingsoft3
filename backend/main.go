@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/handlers"
-	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services"
+	"github.com/ignaciomagoia/tp8ingsoft3/backend/internal/handlers"
+	"github.com/ignaciomagoia/tp8ingsoft3/backend/internal/services"
 )
 
 func getAllowedOrigins() []string {

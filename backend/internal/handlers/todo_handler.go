@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services"
+	"github.com/ignaciomagoia/tp8ingsoft3/backend/internal/services"
 )
 
 // TodoHandler exposes HTTP handlers for todo operations.

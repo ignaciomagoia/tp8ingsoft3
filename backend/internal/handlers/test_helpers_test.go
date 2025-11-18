@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"github.com/ignaciomagoia/tp6ingdesoft/backend/internal/services"
+	"github.com/ignaciomagoia/tp8ingsoft3/backend/internal/services"
 )
 
 type memoryUserRepo struct {
