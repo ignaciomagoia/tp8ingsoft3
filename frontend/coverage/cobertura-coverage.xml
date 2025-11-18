@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="178" lines-covered="156" line-rate="0.8764" branches-valid="98" branches-covered="75" branch-rate="0.7653" timestamp="1763486811439" complexity="0" version="0.1">
+<coverage lines-valid="178" lines-covered="156" line-rate="0.8764" branches-valid="98" branches-covered="75" branch-rate="0.7653" timestamp="1763488014619" complexity="0" version="0.1">
   <sources>
     <source>C:\Users\Usuario\Documents\tp8ingsoft3\frontend</source>
   </sources>

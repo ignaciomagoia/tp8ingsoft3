@@ -27,7 +27,7 @@ body {
   align-items: center;
   gap: 32px;
   padding: 56px 24px 72px;
-  background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 45%, #fbcfe8 100%);
+  background: green !important;
 }
 
 .app__header {
