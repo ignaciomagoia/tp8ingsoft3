@@ -1,175 +1,137 @@
-name: Full CI/CD Pipeline (QA → PROD)
+name: Full CI/CD Pipeline - TP08
 
 on:
   push:
-    branches: ["main", "develop"]
+    branches: [ main ]
   pull_request:
-    branches: ["main", "develop"]
-  workflow_dispatch:
+    branches: [ main ]
 
 env:
   RG: rg-tp8-cicd
-  NODE_VERSION: "22.x"
 
-# =====================================================================
-#                               CI STAGES
-# =====================================================================
 jobs:
-
-  # ---------------- BACKEND TESTS ----------------
-  backend-tests:
-    name: Backend tests
+  # ============================
+  # BACKEND TESTS
+  # ============================
+  backend_tests:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: backend
-
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v4
         with:
-          go-version: "1.24"
+          go-version: "1.22"
 
-      - run: |
-          go test ./... -coverprofile=coverage.out
-          go tool cover -func=coverage.out
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: backend-app
-          path: backend/app
+      - run: go test ./... -v
 
 
-  # ---------------- FRONTEND TESTS ----------------
-  frontend-tests:
-    name: Frontend tests
+  # ============================
+  # FRONTEND TESTS
+  # ============================
+  frontend_tests:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
+      - run: npm ci
         working-directory: frontend
-        run: npm ci
 
-      - name: Run tests
+      - run: npm test --watchAll=false
         working-directory: frontend
-        run: npm test -- --coverage --watchAll=false
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: frontend-coverage-report
-          path: frontend/coverage/lcov-report
 
 
-  # ---------------- SONARCLOUD ----------------
-  sonarcloud-analysis:
-    name: SonarCloud Analysis
+  # ============================
+  # SONARCLOUD ANALYSIS
+  # ============================
+  sonarcloud:
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests]
+    needs: [backend_tests, frontend_tests]
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
-      - uses: actions/cache@v3
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-
-      - uses: SonarSource/sonarcloud-github-action@v2
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
-  # ---------------- CYPRESS E2E ----------------
-  e2e-tests:
-    name: E2E tests (Cypress)
+  # ============================
+  # CYPRESS E2E TESTS
+  # ============================
+  e2e_tests:
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests]
+    needs: sonarcloud
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
+      - run: npm ci
         working-directory: frontend
-        run: npm ci
 
-      - name: Run Cypress tests
-        working-directory: frontend
-        run: npm run e2e
-        env:
-          CYPRESS_BASE_URL: http://localhost:3000
-
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - name: Cypress run
+        uses: cypress-io/github-action@v6
         with:
-          name: cypress-artifacts
-          path: |
-            frontend/cypress/videos
-            frontend/cypress/screenshots
-          if-no-files-found: ignore
+          working-directory: frontend
 
 
-# =====================================================================
-#                         BUILD ARTIFACTS
-# =====================================================================
+  # ============================
+  # BUILD ARTIFACTS
+  # ============================
   build_artifacts:
-    name: Build artifacts (Back & Front)
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests, sonarcloud-analysis, e2e-tests]
+    needs: e2e_tests
 
     steps:
       - uses: actions/checkout@v4
 
-      # ---- BACKEND ----
+      # ------ Backend build ------
       - name: Build backend
-        working-directory: backend
         run: go build -o app .
+        working-directory: backend
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
         with:
           name: backend-app
           path: backend/app
 
-      # ---- FRONTEND ----
-      - name: Build frontend
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
 
-      - uses: actions/upload-artifact@v4
+      # ------ Frontend build ------
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+        working-directory: frontend
+
+      - run: npm run build
+        working-directory: frontend
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
         with:
           name: frontend-build
           path: frontend/build
 
 
-# =====================================================================
-#                         DEPLOY QA
-# =====================================================================
+  # ============================
+  # DEPLOY QA
+  # ============================
   deploy_qa:
-    name: Deploy QA
     runs-on: ubuntu-latest
     needs: build_artifacts
     environment: qa
@@ -179,18 +141,24 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # ---- BACKEND ----
+      # -------- BACKEND --------
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
-          path: .
+          path: backend_zip
+
+      - name: Unzip backend
+        run: |
+          mkdir backend
+          cp backend_zip/app backend/app
+          ls -R backend
 
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-qa
-          package: ./app
+          package: backend/app
 
-      - name: Set backend env
+      - name: Set backend QA env
         run: |
           az webapp config appsettings set \
             -g $RG -n tp8-back-qa \
@@ -199,43 +167,44 @@ jobs:
               MONGO_URI="${{ secrets.MONGO_URI_QA }}" \
               FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_QA }}"
 
-      # ---- FRONTEND ----
+      # -------- FRONTEND --------
       - uses: actions/download-artifact@v4
         with:
           name: frontend-build
-          path: frontend
+          path: frontend_dist
 
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-qa
-          package: frontend/build
+          package: frontend_dist
 
-      - name: Set frontend env
+      - name: Set frontend QA env
         run: |
           az webapp config appsettings set \
             -g $RG -n tp8-front-qa \
-            --settings VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
+            --settings \
+              VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
 
 
-# =====================================================================
-#                       APPROVAL GATE
-# =====================================================================
-  approve_prod:
-    name: Approval Gate
+  # ============================
+  # APPROVAL GATE
+  # ============================
+  approval:
     runs-on: ubuntu-latest
     needs: deploy_qa
-    environment: prod
+    environment:
+      name: prod
+      url: https://tp8-front-prod.azurewebsites.net
     steps:
-      - run: echo "Esperando aprobación…"
+      - run: echo "Esperando aprobación para PROD"
 
 
-# =====================================================================
-#                         DEPLOY PROD
-# =====================================================================
+  # ============================
+  # DEPLOY PROD
+  # ============================
   deploy_prod:
-    name: Deploy PROD
     runs-on: ubuntu-latest
-    needs: approve_prod
+    needs: approval
     environment: prod
 
     steps:
@@ -243,16 +212,22 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # ---- BACKEND ----
+      # ------ Backend ------
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
-          path: .
+          path: backend_zip
+
+      - name: Unzip backend
+        run: |
+          mkdir backend
+          cp backend_zip/app backend/app
+          ls -R backend
 
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-prod
-          package: ./app
+          package: backend/app
 
       - name: Set backend PROD env
         run: |
@@ -263,25 +238,20 @@ jobs:
               MONGO_URI="${{ secrets.MONGO_URI_PROD }}" \
               FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_PROD }}"
 
-      # ---- FRONTEND ----
+      # ------ Frontend ------
       - uses: actions/download-artifact@v4
         with:
           name: frontend-build
-          path: frontend
+          path: frontend_dist
 
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-front-prod
-          package: frontend/build
+          package: frontend_dist
 
       - name: Set frontend PROD env
         run: |
           az webapp config appsettings set \
             -g $RG -n tp8-front-prod \
-            --settings VITE_API_URL="https://tp8-back-prod.azurewebsites.net"
-
-      - run: |
-          echo "====================================="
-          echo "     🚀 DEPLOY COMPLETO EN PROD"
-          echo "👉 https://tp8-front-prod.azurewebsites.net"
-          echo "====================================="
+            --settings \
+              VITE_API_URL="https://tp8-back-prod.azurewebsites.net"
