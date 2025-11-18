@@ -44,15 +44,12 @@ func getAllowedOrigins() []string {
 		addOrigin(origin)
 	}
 
-	if env == "" {
-		log.Printf("[CORS] FRONT_ORIGINS vacio, usando defaults locales: %v", defaultOrigins)
-	} else {
-		for _, part := range strings.Split(env, ",") {
-			addOrigin(part)
+	if env != "" {
+		for _, o := range strings.Split(env, ",") {
+			addOrigin(o)
 		}
 	}
 
-	log.Printf("[CORS] Total de origenes permitidos: %d", len(out))
 	return out
 }
 
@@ -73,9 +70,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("no se pudo conectar a MongoDB: %v", err)
 	}
-	defer func() {
-		_ = client.Disconnect(context.Background())
-	}()
+	defer client.Disconnect(context.Background())
 
 	db := client.Database(dbName)
 
@@ -88,49 +83,45 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userService)
 	todoHandler := handlers.NewTodoHandler(todoService)
 
-	// Configurar CORS ANTES de crear el router
 	allowedOrigins := getAllowedOrigins()
 
-	// Crear un mapa para búsqueda rápida de orígenes permitidos
-	allowedOriginsMap := make(map[string]bool)
-	for _, origin := range allowedOrigins {
-		allowedOriginsMap[origin] = true
-	}
-
 	corsCfg := cors.Config{
-		AllowOriginFunc: func(origin string) bool {
-			// Si no hay origen (petición del mismo origen), permitir
-			if origin == "" {
-				return true
-			}
-			// Permitir si el origen está en la lista
-			if allowedOriginsMap[origin] {
-				log.Printf("[CORS] ✅ Origen permitido: %q", origin)
-				return true
-			}
-			log.Printf("[CORS] ❌ Origen bloqueado: %q (permitidos: %v)", origin, allowedOrigins)
-			return false
-		},
+		AllowOrigins:     allowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}
-	log.Printf("[CORS] Configuración aplicada con %d orígenes permitidos", len(allowedOrigins))
 
-	router := handlers.SetupRouter(authHandler, todoHandler, handlers.RouterConfig{
-		Middlewares: []gin.HandlerFunc{cors.New(corsCfg)},
+	router := gin.Default()
+
+	// 💥 APLICAR CORS ANTES DEL ROUTER
+	router.Use(cors.New(corsCfg))
+
+	// Endpoint de salud
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
 	})
 
+	// APIs
+	router.POST("/register", authHandler.Register)
+	router.POST("/login", authHandler.Login)
+
+	router.GET("/todos", todoHandler.ListTodos)
+	router.POST("/todos", todoHandler.CreateTodo)
+	router.PUT("/todos/:id", todoHandler.UpdateTodo)
+	router.DELETE("/todos/:id", todoHandler.DeleteTodo)
+	router.DELETE("/todos", todoHandler.ClearTodos)
+
+	// Importante: Render usa PORT
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	log.Printf("[SERVER] Iniciando servidor en puerto %s", port)
-	log.Printf("[SERVER] CORS configurado para orígenes: %v", allowedOrigins)
+	log.Printf("[SERVER] Corriendo en puerto %s", port)
 	if err := router.Run(":" + port); err != nil {
-		log.Fatalf("no se pudo iniciar el servidor: %v", err)
+		log.Fatal(err)
 	}
 }
