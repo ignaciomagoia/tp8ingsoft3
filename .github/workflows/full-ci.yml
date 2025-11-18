@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 env:
-  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/tp8-backend
-  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/tp8-frontend
+  BACKEND_IMAGE: ghcr.io/ignaciomagoia/tp8-backend
+  FRONTEND_IMAGE: ghcr.io/ignaciomagoia/tp8-frontend
 
 # =====================================================================
 #                               CI STAGES
@@ -102,7 +102,7 @@ jobs:
     name: E2E tests (Cypress)
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests]
-    container: cypress/included:13.17.0   # <<< Cypress ya viene instalado
+    container: cypress/included:13.17.0
 
     defaults:
       run:
@@ -141,7 +141,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ignaciomagoia
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build backend image
@@ -219,5 +219,5 @@ jobs:
         run: |
           echo "====================================="
           echo "       🚀 DEPLOY COMPLETO EN PROD"
-          echo "👉 https://frontend-prod.onrender.com"
+          echo "👉 Release final desplegado correctamente"
           echo "====================================="
