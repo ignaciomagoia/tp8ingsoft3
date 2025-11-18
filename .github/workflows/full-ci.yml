@@ -193,6 +193,14 @@ jobs:
       - name: Trigger Frontend QA deploy
         run: curl -X POST "${{ secrets.RENDER_FRONTEND_QA_HOOK }}"
 
+      - name: QA URLs
+        run: |
+          echo "========================================="
+          echo "   🔵 QA DEPLOY COMPLETO"
+          echo "👉 Frontend QA:"
+          echo "   https://frontend-qa-qymo.onrender.com"
+          echo "========================================="
+
   approve_prod:
     name: Approval Gate
     runs-on: ubuntu-latest
@@ -215,9 +223,10 @@ jobs:
       - name: Trigger Frontend PROD deploy
         run: curl -X POST "${{ secrets.RENDER_FRONTEND_PROD_HOOK }}"
 
-      - name: Done
+      - name: PROD URLs
         run: |
-          echo "====================================="
-          echo "       🚀 DEPLOY COMPLETO EN PROD"
-          echo "👉 Release final desplegado correctamente"
-          echo "====================================="
+          echo "========================================="
+          echo "   🟢 PROD DEPLOY COMPLETO"
+          echo "👉 Frontend PROD:"
+          echo "   https://frontend-prod-z6yw.onrender.com"
+          echo "========================================="
