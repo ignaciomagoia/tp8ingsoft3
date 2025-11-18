@@ -11,12 +11,11 @@ env:
   BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/tp8-backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/tp8-frontend
 
-# =====================================================================
-#                               CI STAGES
-# =====================================================================
-
 jobs:
 
+  # =====================================================================
+  #                           BACKEND TESTS
+  # =====================================================================
   backend-tests:
     name: Backend tests
     runs-on: ubuntu-latest
@@ -42,6 +41,9 @@ jobs:
           name: backend-coverage
           path: backend/coverage.out
 
+  # =====================================================================
+  #                           FRONTEND TESTS
+  # =====================================================================
   frontend-tests:
     name: Frontend tests
     runs-on: ubuntu-latest
@@ -59,7 +61,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies (skip Cypress binary)
+      - name: Install deps (skip Cypress binary)
         run: npm ci
         env:
           CYPRESS_INSTALL_BINARY: 0
@@ -72,6 +74,9 @@ jobs:
           name: frontend-coverage-report
           path: frontend/coverage/lcov-report
 
+  # =====================================================================
+  #                           SONARCLOUD
+  # =====================================================================
   sonarcloud-analysis:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
@@ -98,6 +103,9 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # =====================================================================
+  #                           E2E TESTS (CYPRESS)
+  # =====================================================================
   e2e-tests:
     name: E2E tests (Cypress)
     runs-on: ubuntu-latest
@@ -117,15 +125,22 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies (skip Cypress binary)
+      - name: Install deps (skip Cypress binary)
         run: npm ci
         env:
           CYPRESS_INSTALL_BINARY: 0
 
-      - name: Install Cypress binary manually
+      - name: Install Cypress binary
         run: npx cypress install
 
-      - name: Run Cypress tests (headless)
+      - name: Start frontend (preview mode)
+        run: |
+          npm run build
+          npx vite preview --port 3000 &
+          echo "Esperando que el servidor arranque..."
+          sleep 5
+
+      - name: Run Cypress tests
         run: npx cypress run
         env:
           CYPRESS_BASE_URL: http://localhost:3000
@@ -137,70 +152,68 @@ jobs:
           path: frontend/cypress
           if-no-files-found: ignore
 
+  # =====================================================================
+  #                     BUILD & PUSH GHCR IMAGES
+  # =====================================================================
   build_images:
-    name: Build & push Docker images (Back & Front)
+    name: Build & push Docker images
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests, sonarcloud-analysis, e2e-tests]
+    needs: e2e-tests
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to GHCR
+      - name: Login GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build backend image
-        run: |
-          docker build \
-            -f backend/Dockerfile \
-            -t $BACKEND_IMAGE:${{ github.sha }} \
-            backend
+      - name: Build backend
+        run: docker build -t $BACKEND_IMAGE:${{ github.sha }} backend
 
-      - name: Tag backend image
+      - name: Tag backend
         run: |
           docker tag $BACKEND_IMAGE:${{ github.sha }} $BACKEND_IMAGE:qa-latest
           docker tag $BACKEND_IMAGE:${{ github.sha }} $BACKEND_IMAGE:prod-latest
 
-      - name: Push backend images
+      - name: Push backend
         run: |
           docker push $BACKEND_IMAGE:${{ github.sha }}
           docker push $BACKEND_IMAGE:qa-latest
           docker push $BACKEND_IMAGE:prod-latest
 
-      - name: Build frontend image
-        run: |
-          docker build \
-            -f frontend/Dockerfile \
-            -t $FRONTEND_IMAGE:${{ github.sha }} \
-            frontend
+      - name: Build frontend
+        run: docker build -t $FRONTEND_IMAGE:${{ github.sha }} frontend
 
       - name: Tag frontend
         run: |
           docker tag $FRONTEND_IMAGE:${{ github.sha }} $FRONTEND_IMAGE:qa-latest
           docker tag $FRONTEND_IMAGE:${{ github.sha }} $FRONTEND_IMAGE:prod-latest
 
-      - name: Push frontend images
+      - name: Push frontend
         run: |
           docker push $FRONTEND_IMAGE:${{ github.sha }}
           docker push $FRONTEND_IMAGE:qa-latest
           docker push $FRONTEND_IMAGE:prod-latest
 
+  # =====================================================================
+  #                           DEPLOY QA
+  # =====================================================================
   deploy_qa:
-    name: Deploy QA Web Apps (Render)
+    name: Deploy QA (Render)
     runs-on: ubuntu-latest
     needs: build_images
     environment: qa
 
     steps:
-      - name: Trigger Backend QA deploy
-        run: curl -X POST "${{ secrets.RENDER_BACKEND_QA_HOOK }}"
+      - run: curl -X POST "${{ secrets.RENDER_BACKEND_QA_HOOK }}"
+      - run: curl -X POST "${{ secrets.RENDER_FRONTEND_QA_HOOK }}"
 
-      - name: Trigger Frontend QA deploy
-        run: curl -X POST "${{ secrets.RENDER_FRONTEND_QA_HOOK }}"
-
+  # =====================================================================
+  #                           APPROVAL GATE
+  # =====================================================================
   approve_prod:
     name: Approval Gate
     runs-on: ubuntu-latest
@@ -208,24 +221,17 @@ jobs:
     environment: prod
 
     steps:
-      - run: echo "Esperando aprobación manual para desplegar en PROD…"
+      - run: echo "Esperando aprobación manual…"
 
+  # =====================================================================
+  #                           DEPLOY PROD
+  # =====================================================================
   deploy_prod:
-    name: Deploy PROD Web Apps (Render)
+    name: Deploy PROD (Render)
     runs-on: ubuntu-latest
     needs: approve_prod
     environment: prod
 
     steps:
-      - name: Trigger Backend PROD deploy
-        run: curl -X POST "${{ secrets.RENDER_BACKEND_PROD_HOOK }}"
-
-      - name: Trigger Frontend PROD deploy
-        run: curl -X POST "${{ secrets.RENDER_FRONTEND_PROD_HOOK }}"
-
-      - name: Done
-        run: |
-          echo "====================================="
-          echo "       🚀 DEPLOY COMPLETO EN PROD"
-          echo "👉 https://frontend-prod.onrender.com"
-          echo "====================================="
+      - run: curl -X POST "${{ secrets.RENDER_BACKEND_PROD_HOOK }}"
+      - run: curl -X POST "${{ secrets.RENDER_FRONTEND_PROD_HOOK }}"
