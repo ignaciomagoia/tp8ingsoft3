@@ -142,7 +142,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ignaciomagoia
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
 
       - name: Build backend image
         run: |
