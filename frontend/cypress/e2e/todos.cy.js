@@ -72,9 +72,5 @@ describe('Todos – flujos principales', () => {
 
     cy.contains(/boom|error|falló|failed|intente|try again/i).should('be.visible');
   });
-  it("Fallo forzado para demostrar CI/CD", () => {
-    cy.visit('/ruta-que-no-existe-12345');
-    cy.contains("ESTO NO EXISTE").should('be.visible');
-  });
 });
 
