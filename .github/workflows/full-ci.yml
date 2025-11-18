@@ -17,7 +17,6 @@ env:
 
 jobs:
 
-  # ---------------- BACKEND TESTS ----------------
   backend-tests:
     name: Backend tests
     runs-on: ubuntu-latest
@@ -43,7 +42,6 @@ jobs:
           name: backend-coverage
           path: backend/coverage.out
 
-  # ---------------- FRONTEND TESTS ----------------
   frontend-tests:
     name: Frontend tests
     runs-on: ubuntu-latest
@@ -66,7 +64,7 @@ jobs:
         env:
           CYPRESS_INSTALL_BINARY: 0
 
-      - name: Run frontend unit tests
+      - name: Run unit tests
         run: npm test -- --coverage --watchAll=false
 
       - uses: actions/upload-artifact@v4
@@ -74,7 +72,6 @@ jobs:
           name: frontend-coverage-report
           path: frontend/coverage/lcov-report
 
-  # ---------------- SONARCLOUD ----------------
   sonarcloud-analysis:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
@@ -101,7 +98,6 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ---------------- CYPRESS E2E ----------------
   e2e-tests:
     name: E2E tests (Cypress)
     runs-on: ubuntu-latest
@@ -126,7 +122,10 @@ jobs:
         env:
           CYPRESS_INSTALL_BINARY: 0
 
-      - name: Run Cypress headless tests
+      - name: Install Cypress binary manually
+        run: npx cypress install
+
+      - name: Run Cypress tests (headless)
         run: npx cypress run
         env:
           CYPRESS_BASE_URL: http://localhost:3000
@@ -137,10 +136,6 @@ jobs:
           name: cypress-artifacts
           path: frontend/cypress
           if-no-files-found: ignore
-
-# =====================================================================
-#                      BUILD & PUSH DOCKER IMAGES
-# =====================================================================
 
   build_images:
     name: Build & push Docker images (Back & Front)
@@ -157,7 +152,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ---- BACKEND IMAGE ----
       - name: Build backend image
         run: |
           docker build \
@@ -176,7 +170,6 @@ jobs:
           docker push $BACKEND_IMAGE:qa-latest
           docker push $BACKEND_IMAGE:prod-latest
 
-      # ---- FRONTEND IMAGE ----
       - name: Build frontend image
         run: |
           docker build \
@@ -184,7 +177,7 @@ jobs:
             -t $FRONTEND_IMAGE:${{ github.sha }} \
             frontend
 
-      - name: Tag frontend image
+      - name: Tag frontend
         run: |
           docker tag $FRONTEND_IMAGE:${{ github.sha }} $FRONTEND_IMAGE:qa-latest
           docker tag $FRONTEND_IMAGE:${{ github.sha }} $FRONTEND_IMAGE:prod-latest
@@ -195,10 +188,6 @@ jobs:
           docker push $FRONTEND_IMAGE:qa-latest
           docker push $FRONTEND_IMAGE:prod-latest
 
-# =====================================================================
-#                         DEPLOY QA (RENDER)
-# =====================================================================
-
   deploy_qa:
     name: Deploy QA Web Apps (Render)
     runs-on: ubuntu-latest
@@ -206,15 +195,11 @@ jobs:
     environment: qa
 
     steps:
-      - name: Trigger Backend QA deploy (Render)
+      - name: Trigger Backend QA deploy
         run: curl -X POST "${{ secrets.RENDER_BACKEND_QA_HOOK }}"
 
-      - name: Trigger Frontend QA deploy (Render)
+      - name: Trigger Frontend QA deploy
         run: curl -X POST "${{ secrets.RENDER_FRONTEND_QA_HOOK }}"
-
-# =====================================================================
-#                       APPROVAL GATE (PROD)
-# =====================================================================
 
   approve_prod:
     name: Approval Gate
@@ -225,10 +210,6 @@ jobs:
     steps:
       - run: echo "Esperando aprobación manual para desplegar en PROD…"
 
-# =====================================================================
-#                         DEPLOY PROD (RENDER)
-# =====================================================================
-
   deploy_prod:
     name: Deploy PROD Web Apps (Render)
     runs-on: ubuntu-latest
@@ -236,15 +217,15 @@ jobs:
     environment: prod
 
     steps:
-      - name: Trigger Backend PROD deploy (Render)
+      - name: Trigger Backend PROD deploy
         run: curl -X POST "${{ secrets.RENDER_BACKEND_PROD_HOOK }}"
 
-      - name: Trigger Frontend PROD deploy (Render)
+      - name: Trigger Frontend PROD deploy
         run: curl -X POST "${{ secrets.RENDER_FRONTEND_PROD_HOOK }}"
 
       - name: Done
         run: |
           echo "====================================="
           echo "       🚀 DEPLOY COMPLETO EN PROD"
-          echo "👉 Frontend PROD listo en Render"
+          echo "👉 https://frontend-prod.onrender.com"
           echo "====================================="
