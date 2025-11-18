@@ -158,7 +158,6 @@ jobs:
         run: |
           npm ci
           npm run build
-          ls -R build
 
       - uses: actions/upload-artifact@v4
         with:
@@ -184,19 +183,19 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
-          path: backend
+          path: backend/
 
       # ---- DESCARGAR FRONTEND ----
       - uses: actions/download-artifact@v4
         with:
           name: frontend-build
-          path: frontend
+          path: frontend/
 
       # ---- DEPLOY BACKEND QA ----
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-qa
-          package: backend/backend-app/app
+          package: backend/app
 
       - name: Set backend QA env
         run: |
@@ -204,8 +203,9 @@ jobs:
             -g $RG -n tp8-back-qa \
             --settings \
               PORT=8080 \
-              MONGO_URI="${{ secrets.MONGO_URI }}" \
-              FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_QA }}"
+              GO_ENV=production \
+              MONGO_URI="${{ secrets.MONGO_URI_QA }}" \
+              FRONT_ORIGINS="https://tp8-front-qa.azurewebsites.net"
 
       # ---- DEPLOY FRONTEND QA ----
       - uses: azure/webapps-deploy@v2
@@ -217,8 +217,7 @@ jobs:
         run: |
           az webapp config appsettings set \
             -g $RG -n tp8-front-qa \
-            --settings \
-              VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
+            --settings VITE_API_URL="https://tp8-back-qa.azurewebsites.net"
 
 
 # =====================================================================
@@ -231,7 +230,7 @@ jobs:
     environment: prod
 
     steps:
-      - run: echo "Esperando aprobación…"
+      - run: echo "Esperando aprobación para PROD…"
 
 
 # =====================================================================
@@ -252,19 +251,19 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: backend-app
-          path: backend
+          path: backend/
 
       # ---- DESCARGAR FRONTEND ----
       - uses: actions/download-artifact@v4
         with:
           name: frontend-build
-          path: frontend
+          path: frontend/
 
       # ---- DEPLOY BACKEND PROD ----
       - uses: azure/webapps-deploy@v2
         with:
           app-name: tp8-back-prod
-          package: backend/backend-app/app
+          package: backend/app
 
       - name: Set backend PROD env
         run: |
@@ -272,8 +271,9 @@ jobs:
             -g $RG -n tp8-back-prod \
             --settings \
               PORT=8080 \
-              MONGO_URI="${{ secrets.MONGO_URI }}" \
-              FRONT_ORIGINS="${{ secrets.FRONT_ORIGINS_PROD }}"
+              GO_ENV=production \
+              MONGO_URI="${{ secrets.MONGO_URI_PROD }}" \
+              FRONT_ORIGINS="https://tp8-front-prod.azurewebsites.net"
 
       # ---- DEPLOY FRONTEND PROD ----
       - uses: azure/webapps-deploy@v2
@@ -289,6 +289,6 @@ jobs:
 
       - run: |
           echo "====================================="
-          echo "     🚀 DEPLOY COMPLETO EN PROD"
+          echo "       🚀 DEPLOY COMPLETO EN PROD"
           echo "👉 https://tp8-front-prod.azurewebsites.net"
           echo "====================================="
