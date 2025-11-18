@@ -33,7 +33,7 @@ jobs:
         with:
           go-version: "1.24"
 
-      - name: Run backend tests with coverage
+      - name: Run backend tests
         run: |
           go test ./... -coverprofile=coverage.out
           go tool cover -func=coverage.out
@@ -61,8 +61,13 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - run: npm ci
-      - run: npm test -- --coverage --watchAll=false
+      - name: Install dependencies (skip Cypress binary)
+        run: npm ci
+        env:
+          CYPRESS_INSTALL_BINARY: 0
+
+      - name: Run frontend unit tests
+        run: npm test -- --coverage --watchAll=false
 
       - uses: actions/upload-artifact@v4
         with:
@@ -116,8 +121,13 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - run: npm ci
-      - run: npm run e2e
+      - name: Install dependencies (skip Cypress binary)
+        run: npm ci
+        env:
+          CYPRESS_INSTALL_BINARY: 0
+
+      - name: Run Cypress headless tests
+        run: npx cypress run
         env:
           CYPRESS_BASE_URL: http://localhost:3000
 
@@ -125,9 +135,7 @@ jobs:
         if: always()
         with:
           name: cypress-artifacts
-          path: |
-            frontend/cypress/videos
-            frontend/cypress/screenshots
+          path: frontend/cypress
           if-no-files-found: ignore
 
 # =====================================================================
@@ -199,12 +207,10 @@ jobs:
 
     steps:
       - name: Trigger Backend QA deploy (Render)
-        run: |
-          curl -X POST "${{ secrets.RENDER_BACKEND_QA_HOOK }}"
+        run: curl -X POST "${{ secrets.RENDER_BACKEND_QA_HOOK }}"
 
       - name: Trigger Frontend QA deploy (Render)
-        run: |
-          curl -X POST "${{ secrets.RENDER_FRONTEND_QA_HOOK }}"
+        run: curl -X POST "${{ secrets.RENDER_FRONTEND_QA_HOOK }}"
 
 # =====================================================================
 #                       APPROVAL GATE (PROD)
@@ -231,16 +237,14 @@ jobs:
 
     steps:
       - name: Trigger Backend PROD deploy (Render)
-        run: |
-          curl -X POST "${{ secrets.RENDER_BACKEND_PROD_HOOK }}"
+        run: curl -X POST "${{ secrets.RENDER_BACKEND_PROD_HOOK }}"
 
       - name: Trigger Frontend PROD deploy (Render)
-        run: |
-          curl -X POST "${{ secrets.RENDER_FRONTEND_PROD_HOOK }}"
+        run: curl -X POST "${{ secrets.RENDER_FRONTEND_PROD_HOOK }}"
 
       - name: Done
         run: |
           echo "====================================="
           echo "       🚀 DEPLOY COMPLETO EN PROD"
-          echo "👉 Frontend PROD en Render listo"
+          echo "👉 Frontend PROD listo en Render"
           echo "====================================="
